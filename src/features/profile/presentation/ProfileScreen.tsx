@@ -92,8 +92,8 @@ export function ProfileScreen() {
           value={session?.lastLoginAt ? formatDateTime(session.lastLoginAt) : 'Sesión actual'}
         />
         <InfoRow
-          label="Tiempo restante de inactividad"
-          value={remaining !== null ? `${remaining} s (máx. 300 s)` : '300 s'}
+          label="Tiempo restante de la sesión"
+          value={remaining !== null ? `${remaining} s` : '—'}
         />
 
         {Platform.OS === 'web' ? (

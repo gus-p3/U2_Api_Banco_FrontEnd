@@ -1,4 +1,4 @@
-import type { AuthResult, BiometricType, ServerSessionStatus } from './entities';
+import type { AuthResult, BiometricType } from './entities';
 
 /** Puerto de acceso al backend de autenticación. */
 export interface AuthRepository {
@@ -6,8 +6,8 @@ export interface AuthRepository {
   loginBiometric(email: string, biometricType: BiometricType, secret: string): Promise<AuthResult>;
   enrollBiometric(idClient: number, biometricType: BiometricType, secret: string): Promise<void>;
   refresh(refreshToken: string): Promise<AuthResult>;
-  logout(email: string): Promise<void>;
-  getServerSessionStatus(): Promise<ServerSessionStatus>;
+  /** Revoca el refresh token del usuario del JWT actual. */
+  logout(): Promise<void>;
 }
 
 /** Puerto del sensor biométrico del dispositivo. */

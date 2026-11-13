@@ -9,7 +9,7 @@ export function SessionTimeoutModal() {
     <AppModal
       visible={showWarning}
       title="Tu sesión está por expirar"
-      message={`Por tu seguridad cerraremos la sesión por inactividad en ${remaining ?? 0} segundos. ¿Deseas continuar conectado?`}
+      message={`Tu sesión expira en ${remaining ?? 0} segundos. ¿Deseas continuar conectado?`}
       actions={
         <>
           <Button title="Seguir conectado" onPress={() => void keepAlive()} loading={keepingAlive} />

@@ -32,15 +32,3 @@ export interface AuthResponseDto {
   biometricType?: 'HUELLA' | 'FACIAL';
   lastLoginAt?: string;
 }
-
-export interface ServerSessionStatusDto {
-  isLoggedIn?: boolean;
-  inactivitySeconds?: number;
-  maxInactivitySeconds?: number;
-  remainingSeconds?: number;
-  userEmail?: string;
-  clientId?: number;
-  status?: string;
-  lastActivityAt?: string;
-  message?: string;
-}

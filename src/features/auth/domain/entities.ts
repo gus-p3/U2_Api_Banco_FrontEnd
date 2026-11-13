@@ -1,5 +1,6 @@
 export type AuthMethod = 'PASSWORD' | 'BIOMETRIC_HUELLA' | 'BIOMETRIC_FACIAL' | 'REFRESH';
 export type BiometricType = 'HUELLA' | 'FACIAL';
+export type Role = 'CLIENT' | 'ADMIN';
 
 export interface Tokens {
   accessToken: string;
@@ -10,6 +11,9 @@ export interface Session {
   email: string;
   idClient: number;
   authMethod: AuthMethod;
+  role: Role;
+  /** Vencimiento del access token (epoch ms), tomado del claim `exp` del JWT. */
+  expiresAt?: number;
   hasBiometricRegistered: boolean;
   biometricType?: BiometricType;
   lastLoginAt?: string;
@@ -18,11 +22,4 @@ export interface Session {
 export interface AuthResult {
   session: Session;
   tokens: Tokens;
-}
-
-export interface ServerSessionStatus {
-  isLoggedIn: boolean;
-  remainingSeconds: number;
-  maxInactivitySeconds: number;
-  userEmail?: string;
 }

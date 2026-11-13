@@ -12,7 +12,7 @@ interface SessionState {
   accessToken: string | null;
   refreshToken: string | null;
   endReason: EndReason | null;
-  /** Segundos restantes de la sesión de servidor (null si no se conoce). */
+  /** Segundos restantes del access token actual (null si no se conoce). */
   remainingSeconds: number | null;
 
   setAuthenticated: (session: Session, tokens: Tokens) => void;

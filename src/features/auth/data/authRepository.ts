@@ -7,9 +7,8 @@ import type {
   BiometricLoginRequestDto,
   BiometricRegisterRequestDto,
   RefreshTokenRequestDto,
-  ServerSessionStatusDto,
 } from './dto';
-import { toAuthResult, toServerSessionStatus } from './mappers';
+import { toAuthResult } from './mappers';
 
 /** Implementación HTTP del repositorio de autenticación. Recibe el cliente por inyección (testeable). */
 export function createAuthRepository(client: AxiosInstance): AuthRepository {
@@ -30,7 +29,8 @@ export function createAuthRepository(client: AxiosInstance): AuthRepository {
 
     async enrollBiometric(idClient, biometricType, secret) {
       const body: BiometricRegisterRequestDto = { idClient, biometricType, biometricData: secret };
-      await client.post<AuthResponseDto>('/v1/auth/biometria', body, { skipAuth: true });
+      // Requiere JWT: un cliente solo puede enrolar su propia biometría.
+      await client.post<AuthResponseDto>('/v1/auth/biometria', body);
     },
 
     async refresh(refreshToken) {
@@ -39,15 +39,9 @@ export function createAuthRepository(client: AxiosInstance): AuthRepository {
       return toAuthResult(data);
     },
 
-    async logout(email) {
-      await client.post('/v1/auth/logout', null, { params: { email } });
-    },
-
-    async getServerSessionStatus() {
-      const { data } = await client.get<ServerSessionStatusDto>('/v1/auth/session-status', {
-        skipAuth: true,
-      });
-      return toServerSessionStatus(data);
+    async logout() {
+      // El backend revoca el refresh token del dueño del JWT (Authorization: Bearer).
+      await client.post('/v1/auth/logout');
     },
   };
 }

@@ -63,7 +63,7 @@ frontend/
     ├── core/                   # env, cliente Axios con interceptor 401/refresh, mapeo de ErrorCode, SecureStore, JWT
     ├── shared/                 # Theme bancario (azul marino #0B1F4B + dorado #C9A227) y componentes UI reutilizables
     └── features/
-        ├── auth/               # Login contraseña/biometría, enrolamiento de huella, guardia de inactividad (5 min)
+        ├── auth/               # Login contraseña/biometría, enrolamiento de huella, guardia de expiración del JWT (aviso y renovación con refresh token)
         ├── accounts/           # Resumen de cliente (/v1/clientes/me), cuentas y movimientos (/v1/cuentas/{n}/movimientos)
         ├── payments/           # Catálogo GestoPago (/v1/productos/redis), pagos (/v1/pagos) con re-autenticación de huella y comprobante
         ├── catalogs/           # Catálogos INEGI/bancarios para onboarding

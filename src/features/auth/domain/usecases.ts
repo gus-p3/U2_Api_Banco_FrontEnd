@@ -48,14 +48,11 @@ export async function enableBiometrics(
 }
 
 /** Cierra la sesión en servidor (best effort) y limpia secretos de sesión locales. */
-export async function logout(
-  deps: { repo: AuthRepository; store: SecretStore },
-  email: string | undefined,
-): Promise<void> {
+export async function logout(deps: { repo: AuthRepository; store: SecretStore }): Promise<void> {
   try {
-    if (email) await deps.repo.logout(email);
+    await deps.repo.logout();
   } catch {
-    // La sesión puede haber expirado ya en el servidor: igual limpiamos localmente.
+    // El token puede haber expirado ya: igual limpiamos localmente.
   } finally {
     await deps.store.clearRefreshToken();
   }

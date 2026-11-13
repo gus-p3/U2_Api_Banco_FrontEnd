@@ -63,12 +63,11 @@ export async function refreshSession(): Promise<string> {
 
 /** Cierre de sesión voluntario: avisa al servidor y limpia el estado local. */
 export async function signOut(): Promise<void> {
-  const email = useSessionStore.getState().session?.email;
-  await logoutUseCase(authDeps, email);
+  await logoutUseCase(authDeps);
   useSessionStore.getState().setUnauthenticated('logout');
 }
 
-/** Cierre local inmediato (sesión expirada en servidor/refresh fallido). */
+/** Cierre local inmediato (token vencido sin renovar o refresh fallido). */
 export async function endSessionLocally(reason: EndReason): Promise<void> {
   if (useSessionStore.getState().status !== 'authenticated') return;
   useSessionStore.getState().setUnauthenticated(reason);

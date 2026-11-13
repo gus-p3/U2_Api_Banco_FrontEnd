@@ -8,25 +8,24 @@ Jackson: `fail-on-unknown-properties=true`, `non_null` (campos nulos se omiten �
 |---|---|---|---|
 | POST | `/login` | `{email, password}` | `AuthResponse` |
 | POST | `/login-biometrico` | `{email, biometricType: "HUELLA"\|"FACIAL", biometricData: base64, deviceId?}` | `AuthResponse` |
-| POST | `/biometria` | `{idClient: number, biometricType, biometricData}` | `AuthResponse` |
+| POST | `/biometria` (requiere Bearer; un CLIENT solo su propio `idClient`) | `{idClient: number, biometricType, biometricData}` | `AuthResponse` |
 | POST | `/refresh` | `{refreshToken}` | `AuthResponse` |
-| POST | `/logout?email=` | – | 204 |
-| GET | `/session-status` (alias `/estado-servidor`) | – | `ServerSessionStatusResponse` |
+| POST | `/logout` (requiere Bearer; revoca el refresh token del dueño del JWT) | – | 204 |
 
 - `AuthRequest.password`: 12–100 chars, con mayúscula, minúscula, número y especial `[@$!%*?&.#_-]`.
-- `AuthResponse`: `token, refreshToken, tokenType, expiresIn, email, isActive, hasBiometricRegistered, biometricType?, lastLoginAt?` (**`idClient` está con `@JsonIgnore`, no llega al cliente**).
-- `ServerSessionStatusResponse`: `isLoggedIn, inactivitySeconds, maxInactivitySeconds, remainingSeconds, userEmail?, clientId?, status, lastActivityAt?, message`.
-- JWT: access 300 s. Claims: `sub=email, idClient, idLogin, role, authMethod` (`PASSWORD | BIOMETRIC_HUELLA | BIOMETRIC_FACIAL | REFRESH`).
+- `AuthResponse`: `token, refreshToken, tokenType, expiresIn, email, role, isActive, hasBiometricRegistered, biometricType?, lastLoginAt?` (**`idClient` está con `@JsonIgnore`, no llega al cliente**).
+- JWT stateless: access 300 s, el front calcula el tiempo restante con el claim `exp` y renueva con `/refresh`. Claims: `sub=email, idClient, idLogin, role (CLIENT|ADMIN), authMethod` (`PASSWORD | BIOMETRIC_HUELLA | BIOMETRIC_FACIAL | REFRESH`).
 - Demo: `alejandro.hernandez@banco-demo.com` / `PasswordSegura#2026`; huella `dGhpcy1pcy1hLXZhbGlkLWJpb21ldHJpYy1zaWduYXR1cmUtZGF0YQ==`; saldo 25000; cuenta demo en Swagger `9876543210`.
 
-## Sesión de servidor (`ServerSessionInterceptor`)
-- Es un **booleano global en el servidor** (no por usuario) con inactividad de 300 s. Cada petición protegida lo renueva.
-- Peticiones protegidas sin sesión → 401 con cuerpo **distinto** a `ErrorResponse`: `{timestamp, status, error, message, path, inactivityLimitSeconds}`.
-- Públicas: `/v1/auth/login*`, `refresh`, `session-status`, `GET /v1/catalogos/**`, `POST /v1/clientes` (onboarding) y `/v1/catalogos/sincronizar`.
+## Seguridad (Spring Security + JWT, sin sesión de servidor)
+- Ya **no existe** el booleano global de sesión ni `/v1/auth/session-status`.
+- Errores 401/403 usan el formato `ErrorResponse`: `TOKEN_MISSING`, `TOKEN_EXPIRED_OR_INVALID` (el cliente HTTP renueva con refresh y reintenta) y `ACCESS_DENIED` (403, rol insuficiente).
+- Públicas: `/v1/auth/login*`, `refresh`, `GET /v1/catalogos/**` y `POST /v1/clientes` (onboarding). Todo lo demás requiere Bearer.
+- Solo `ADMIN`: `POST /v1/clientes/buscar`, `PATCH`/`DELETE /v1/clientes`, escritura de productos, `/personas*` y `POST /v1/catalogos/sincronizar`.
 
 ## Clientes (`/v1/clientes`)
 - `GET /v1/clientes/me?includes=accounts,home,contact,employment` (con `Authorization: Bearer`) → `ClientResponse` del titular del JWT.
-- `POST /buscar?includes=accounts,home,contact,employment` body opcional `ClientUnifiedQueryRequest {curp?, rfc?, idNationality?, activo?, desde?, hasta?, sortBy?, sortDirection?}` → `ClientResponse[]`.
+- `POST /buscar?includes=accounts,home,contact,employment` body opcional `ClientUnifiedQueryRequest {curp?, rfc?, idNationality?, activo?, desde?, hasta?, sortBy?, sortDirection?}` → `ClientResponse[]`. **Solo rol ADMIN** (un CLIENT recibe 403); la app móvil usa únicamente `/me`.
 - `POST /v1/clientes` onboarding (`ClientOnboardingRequest`, ver DTO), `PATCH` actualización parcial, `DELETE` desactivar.
 - `ClientResponse` (sin `idClient`): nombres, `birthDate, curp, rfc, idGender, genderName, idNationality, nationalityName, idMaritalStatus, maritalStatusName, isActive, primaryAccount?, accounts?, contactDetail?, home?, employmentInformation?`.
 - `AccountResponse`: `idAccount, accountNumber, balance, status, openedAt, updatedAt`.

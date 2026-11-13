@@ -24,8 +24,6 @@ function resolveApiBaseUrl(): string {
 export const env = {
   apiBaseUrl: resolveApiBaseUrl(),
   requestTimeoutMs: 20_000,
-  /** Segundos restantes de sesión a partir de los cuales se muestra el aviso de expiración. */
+  /** Segundos restantes del access token a partir de los cuales se muestra el aviso de expiración. */
   sessionWarningSeconds: 60,
-  /** Frecuencia de consulta de /v1/auth/session-status. */
-  sessionPollIntervalMs: 15_000,
 } as const;

@@ -172,40 +172,41 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
     ).toBe(1500);
   });
 
-  it('soporta backend cloud Railway: busca cliente por /v1/clientes/buscar y genera movimiento de apertura si /movimientos da 404', async () => {
-    const post = jest.fn().mockResolvedValue({
-      data: [
+  it('soporta backend cloud Railway: consulta al cliente por /v1/clientes/me y genera movimiento de apertura si /movimientos da 404', async () => {
+    const clientDto = {
+      name: 'Alejandro',
+      lastName: 'Hernández',
+      curp: 'HERA900515HDFRND01',
+      contactDetail: { email: 'alejandro.hernandez@banco-demo.com' },
+      primaryAccount: {
+        idAccount: 1,
+        accountNumber: '8336580575',
+        balance: 25000,
+        status: 'ACTIVA',
+        openedAt: '2026-04-06T23:54:47Z',
+      },
+      accounts: [
         {
-          name: 'Alejandro',
-          lastName: 'Hernández',
-          curp: 'HERA900515HDFRND01',
-          contactDetail: { email: 'alejandro.hernandez@banco-demo.com' },
-          primaryAccount: {
-            idAccount: 1,
-            accountNumber: '8336580575',
-            balance: 25000,
-            status: 'ACTIVA',
-            openedAt: '2026-04-06T23:54:47Z',
-          },
-          accounts: [
-            {
-              idAccount: 1,
-              accountNumber: '8336580575',
-              balance: 25000,
-              status: 'ACTIVA',
-              openedAt: '2026-04-06T23:54:47Z',
-            },
-          ],
+          idAccount: 1,
+          accountNumber: '8336580575',
+          balance: 25000,
+          status: 'ACTIVA',
+          openedAt: '2026-04-06T23:54:47Z',
         },
       ],
+    };
+    const get = jest.fn(async (url: string) => {
+      if (url === '/v1/clientes/me') return { data: clientDto };
+      throw new Error('404 Not Found');
     });
-    const get = jest.fn().mockRejectedValue(new Error('404 Not Found'));
+    const post = jest.fn();
     const repo = createAccountsRepository({ post, get } as unknown as AxiosInstance);
 
     const customer = await repo.getCurrentCustomer();
     expect(customer.fullName).toBe('Alejandro Hernández');
     expect(customer.primaryAccount?.number).toBe('8336580575');
 
+    expect(post).not.toHaveBeenCalled(); // /buscar es solo ADMIN
     const movs = await repo.getMovements('8336580575');
     expect(movs).toHaveLength(1);
     expect(movs[0]?.type).toBe('APERTURA');
