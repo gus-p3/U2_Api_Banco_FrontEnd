@@ -47,6 +47,33 @@ export async function enableBiometrics(
   await deps.store.saveBiometricSecret(params.email, secret);
 }
 
+/** Confirma una operación sensible reingresando la contraseña del usuario autenticado. */
+export async function confirmOperationWithPassword(
+  deps: { repo: AuthRepository },
+  password: string,
+): Promise<string> {
+  if (!password || !password.trim()) {
+    return fail('STRONG_AUTH_REQUIRED');
+  }
+  return deps.repo.confirmOperation({ password });
+}
+
+/** Confirma una operación sensible usando la huella registrada en el dispositivo. */
+export async function confirmOperationWithBiometrics(
+  deps: { repo: AuthRepository; store: SecretStore; biometrics: BiometricGateway },
+  email: string,
+): Promise<string> {
+  if (!(await deps.biometrics.isAvailable())) return fail('BIOMETRIC_UNAVAILABLE');
+  const secret = await deps.store.getBiometricSecret(email);
+  if (!secret) return fail('BIOMETRIC_NOT_ENROLLED');
+  const ok = await deps.biometrics.authenticate('Confirma tu huella para autorizar el pago');
+  if (!ok) return fail('BIOMETRIC_CANCELLED');
+  return deps.repo.confirmOperation({
+    biometricType: BIOMETRIC_TYPE,
+    biometricData: secret,
+  });
+}
+
 /** Cierra la sesión en servidor (best effort) y limpia secretos de sesión locales. */
 export async function logout(deps: { repo: AuthRepository; store: SecretStore }): Promise<void> {
   try {

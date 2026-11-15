@@ -1,10 +1,11 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { toAppError } from '@/core/errors/toAppError';
 import { formatCurrency, maskAccount } from '@/core/utils/format';
 import { useAccounts } from '@/features/accounts/presentation/hooks';
+import { isBiometricConfirmationAvailable } from '@/features/auth/presentation/authActions';
 import { colors, radii, spacing, typography } from '@/shared/theme';
 import {
   AppModal,
@@ -15,36 +16,69 @@ import {
   Input,
   ListItem,
   Loader,
+  ProviderLogo,
   Screen,
 } from '@/shared/ui';
 
-import type { PaymentKind, Product } from '../domain/entities';
-import { isPaymentsSupported, receiptStore, usePay, useProducts } from './hooks';
+import type { PaymentKind, Product, ReferenceValidationResult } from '../domain/entities';
+import { receiptStore, usePay, useProducts, useValidateReference } from './hooks';
+
+const PAGE_STEP = 20;
 
 export function PaymentsScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ tab?: string }>();
+  const params = useLocalSearchParams<{ tab?: string; productId?: string; serviceId?: string }>();
   const [kind, setKind] = useState<PaymentKind>('RECARGA');
   const [search, setSearch] = useState('');
+  const [visibleCount, setVisibleCount] = useState(PAGE_STEP);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<string>('');
   const [phone, setPhone] = useState('');
   const [reference, setReference] = useState('');
   const [amount, setAmount] = useState('');
+  const [referenceValidation, setReferenceValidation] =
+    useState<ReferenceValidationResult | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const productsQuery = useProducts();
   const { accounts } = useAccounts();
+  const validateRefMutation = useValidateReference();
   const payMutation = usePay();
-  const supported = isPaymentsSupported();
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      void isBiometricConfirmationAvailable().then(setBiometricAvailable);
+    }
+  }, []);
 
   useEffect(() => {
     if (params.tab === 'SERVICIO' || params.tab === 'RECARGA') {
       setKind(params.tab);
       setSelectedProduct(null);
+      setReferenceValidation(null);
+      setVisibleCount(PAGE_STEP);
     }
   }, [params.tab]);
+
+  useEffect(() => {
+    if (!params.productId || !productsQuery.data) return;
+    const match = productsQuery.data.find(
+      (p) =>
+        String(p.idProducto) === String(params.productId) &&
+        (!params.serviceId || String(p.idServicio) === String(params.serviceId)),
+    );
+    if (match) {
+      if (match.kind === 'RECARGA' || match.kind === 'SERVICIO') {
+        setKind(match.kind);
+      }
+      setSelectedProduct(match);
+      setReferenceValidation(null);
+    }
+  }, [params.productId, params.serviceId, productsQuery.data]);
 
   useEffect(() => {
     if (!selectedAccount && accounts[0]) {
@@ -60,6 +94,45 @@ export function PaymentsScreen() {
       (p) => p.name.toLowerCase().includes(q) || p.serviceName.toLowerCase().includes(q),
     );
   }, [productsQuery.data, kind, search]);
+
+  const handleValidateReference = async () => {
+    setFormError(null);
+    setReferenceValidation(null);
+    if (!selectedProduct) {
+      setFormError('Selecciona un producto del catálogo.');
+      return;
+    }
+    const cleanRef = reference.trim();
+    if (!cleanRef) {
+      setFormError('Ingresa la referencia de pago para validarla.');
+      return;
+    }
+    const parsedAmount = amount.trim() ? Number(amount) : selectedProduct.price;
+    if (parsedAmount !== undefined && (!Number.isFinite(parsedAmount) || parsedAmount <= 0)) {
+      setFormError('Ingresa un monto válido mayor a $0.00 antes de validar la referencia.');
+      return;
+    }
+    try {
+      const result = await validateRefMutation.mutateAsync({
+        idServicio: selectedProduct.idServicio,
+        idProducto: selectedProduct.idProducto,
+        reference: cleanRef,
+        amount: parsedAmount,
+      });
+      setReferenceValidation(result);
+      if (result.valid && result.amountDue && !amount.trim()) {
+        setAmount(String(result.amountDue));
+      }
+      if (!result.valid) {
+        setFormError(result.message);
+      }
+    } catch (e) {
+      setFormError(toAppError(e).message);
+    }
+  };
+
+  const canContinue =
+    kind === 'RECARGA' || (kind === 'SERVICIO' && Boolean(referenceValidation?.valid));
 
   const handlePrepareConfirm = () => {
     setFormError(null);
@@ -85,13 +158,24 @@ export function PaymentsScreen() {
         setFormError('Ingresa un monto válido mayor a $0.00.');
         return;
       }
+      if (!referenceValidation?.valid) {
+        setFormError('Debes validar la referencia antes de continuar con el pago.');
+        return;
+      }
     }
+    setConfirmPassword('');
+    setConfirmError(null);
     setConfirmOpen(true);
   };
 
-  const handleConfirmPay = async () => {
+  const handleConfirmPay = async (mode: 'PASSWORD' | 'BIOMETRIC') => {
     if (!selectedProduct) return;
+    setConfirmError(null);
     setFormError(null);
+    if (mode === 'PASSWORD' && !confirmPassword.trim()) {
+      setConfirmError('Ingresa tu contraseña para confirmar el pago.');
+      return;
+    }
     try {
       const receipt = await payMutation.mutateAsync({
         accountNumber: selectedAccount,
@@ -100,29 +184,25 @@ export function PaymentsScreen() {
         phone: kind === 'RECARGA' ? phone.trim() : undefined,
         reference: kind === 'SERVICIO' ? reference.trim() : undefined,
         amount: kind === 'SERVICIO' ? Number(amount) : undefined,
+        referenceValidated: kind === 'SERVICIO' ? Boolean(referenceValidation?.valid) : true,
+        confirmationPassword: mode === 'PASSWORD' ? confirmPassword : undefined,
+        useBiometricConfirmation: mode === 'BIOMETRIC',
       });
       setConfirmOpen(false);
+      setConfirmPassword('');
       receiptStore.set(receipt);
       router.push('/payment/receipt');
     } catch (e) {
-      setConfirmOpen(false);
-      setFormError(toAppError(e).message);
+      setConfirmError(toAppError(e).message);
     }
   };
+
+  const effectiveAmount =
+    kind === 'RECARGA' ? (selectedProduct?.price ?? 0) : Number(amount) || 0;
 
   return (
     <Screen refreshing={productsQuery.isRefetching} onRefresh={() => void productsQuery.refetch()}>
       <Text style={styles.title}>Pagos y recargas</Text>
-
-      {!supported ? (
-        <View style={styles.webBanner} accessibilityRole="alert">
-          <Text style={styles.webBannerTitle}>Operación disponible solo en la app Android</Text>
-          <Text style={styles.webBannerText}>
-            Por seguridad bancaria, el servidor exige firma biométrica de huella digital para autorizar
-            pagos y recargas. En web puedes explorar el catálogo de productos.
-          </Text>
-        </View>
-      ) : null}
 
       <View style={styles.tabs}>
         {(['RECARGA', 'SERVICIO'] as const).map((k) => {
@@ -136,6 +216,7 @@ export function PaymentsScreen() {
               onPress={() => {
                 setKind(k);
                 setSelectedProduct(null);
+                setReferenceValidation(null);
                 setFormError(null);
               }}
             >
@@ -152,7 +233,10 @@ export function PaymentsScreen() {
           label="Buscar compañía o producto"
           placeholder="Ej. Telcel, CFE, Izzi, Totalplay..."
           value={search}
-          onChangeText={setSearch}
+          onChangeText={(val) => {
+            setSearch(val);
+            setVisibleCount(PAGE_STEP);
+          }}
         />
 
         {productsQuery.isLoading ? (
@@ -165,24 +249,51 @@ export function PaymentsScreen() {
         ) : filteredProducts.length === 0 ? (
           <EmptyState
             title="No se encontraron productos"
-            description="Prueba con otro término de búsqueda."
+            description={
+              search.trim()
+                ? 'Prueba con otro término de búsqueda.'
+                : 'El catálogo está vacío en este momento.'
+            }
+            actionLabel="Reintentar"
+            onAction={() => void productsQuery.refetch()}
           />
         ) : (
           <View style={styles.productList}>
-            {filteredProducts.slice(0, 12).map((p) => {
-              const isSelected = selectedProduct?.id === p.id;
+            {filteredProducts.slice(0, visibleCount).map((p) => {
+              const isSelected =
+                selectedProduct?.idProducto === p.idProducto &&
+                selectedProduct?.idServicio === p.idServicio;
+              const subtitleParts = [
+                p.category ?? 'GestoPago',
+                p.description ?? (p.referenceType ? `Ref: ${p.referenceType}` : undefined),
+                `ID ${p.idServicio}/${p.idProducto}`,
+              ].filter(Boolean);
               return (
-                <View key={p.id} style={[styles.productRow, isSelected && styles.productSelected]}>
+                <View
+                  key={`${p.idServicio}-${p.idProducto}-${p.id}`}
+                  style={[styles.productRow, isSelected && styles.productSelected]}
+                >
                   <ListItem
-                    icon={kind === 'RECARGA' ? 'phone-portrait-outline' : 'receipt-outline'}
+                    leading={<ProviderLogo name={p.serviceName} logoUrl={p.logoUrl} size={40} />}
                     title={`${p.serviceName} · ${p.name}`}
-                    subtitle={p.referenceType ? `Referencia: ${p.referenceType}` : 'GestoPago'}
+                    subtitle={subtitleParts.join(' · ')}
                     trailing={p.price ? formatCurrency(p.price) : 'Monto abierto'}
-                    onPress={() => setSelectedProduct(p)}
+                    onPress={() => {
+                      setSelectedProduct(p);
+                      setReferenceValidation(null);
+                      setFormError(null);
+                    }}
                   />
                 </View>
               );
             })}
+            {visibleCount < filteredProducts.length ? (
+              <Button
+                title={`Mostrar más (${filteredProducts.length - visibleCount} restantes)`}
+                variant="secondary"
+                onPress={() => setVisibleCount((c) => c + PAGE_STEP)}
+              />
+            ) : null}
           </View>
         )}
       </Card>
@@ -231,15 +342,81 @@ export function PaymentsScreen() {
                 label="Referencia o número de contrato"
                 placeholder="Captura los dígitos de tu recibo"
                 value={reference}
-                onChangeText={setReference}
+                onChangeText={(val) => {
+                  setReference(val);
+                  if (referenceValidation) setReferenceValidation(null);
+                  setFormError(null);
+                }}
+                hint={
+                  selectedProduct.referenceType
+                    ? `Formato esperado: ${selectedProduct.referenceType}`
+                    : undefined
+                }
               />
               <Input
                 label="Monto a pagar (MXN)"
                 placeholder="150.00"
                 keyboardType="decimal-pad"
                 value={amount}
-                onChangeText={setAmount}
+                onChangeText={(val) => {
+                  setAmount(val);
+                  if (referenceValidation) setReferenceValidation(null);
+                  setFormError(null);
+                }}
               />
+
+              <Button
+                title={
+                  referenceValidation?.valid
+                    ? 'Referencia validada ✓ (volver a validar)'
+                    : 'Validar referencia'
+                }
+                variant="secondary"
+                loading={validateRefMutation.isPending}
+                onPress={() => void handleValidateReference()}
+              />
+
+              {referenceValidation ? (
+                <View
+                  style={[
+                    styles.validationBox,
+                    referenceValidation.valid
+                      ? styles.validationBoxSuccess
+                      : styles.validationBoxError,
+                  ]}
+                  accessibilityRole="summary"
+                >
+                  <Text style={styles.validationTitle}>
+                    {referenceValidation.valid
+                      ? 'Referencia válida en GestoPago'
+                      : 'Referencia inválida'}
+                  </Text>
+                  <Text style={styles.validationText}>{referenceValidation.message}</Text>
+                  {referenceValidation.valid ? (
+                    <>
+                      <Text style={styles.validationMeta}>
+                        Servicio: {referenceValidation.serviceName ?? selectedProduct.serviceName} ·{' '}
+                        {referenceValidation.productName ?? selectedProduct.name}
+                      </Text>
+                      {referenceValidation.description ? (
+                        <Text style={styles.validationMeta}>
+                          Detalle: {referenceValidation.description}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.validationMeta}>
+                        Titular:{' '}
+                        {referenceValidation.holderName ??
+                          'No proporcionado por el proveedor antes del pago'}
+                      </Text>
+                      {referenceValidation.amountDue ? (
+                        <Text style={styles.validationMeta}>
+                          Importe reportado: {formatCurrency(referenceValidation.amountDue)}
+                        </Text>
+                      ) : null}
+                    </>
+                  ) : null}
+                </View>
+              ) : null}
             </>
           )}
 
@@ -250,8 +427,8 @@ export function PaymentsScreen() {
           ) : null}
 
           <Button
-            title={supported ? 'Continuar y revisar pago' : 'Pago disponible solo en Android'}
-            disabled={!supported}
+            title="Continuar y revisar pago"
+            disabled={!canContinue}
             loading={payMutation.isPending}
             onPress={handlePrepareConfirm}
           />
@@ -260,40 +437,88 @@ export function PaymentsScreen() {
 
       <AppModal
         visible={confirmOpen}
-        title="Confirmar operación"
-        message={
-          selectedProduct
-            ? `Vas a pagar ${selectedProduct.serviceName} (${selectedProduct.name}) con cargo a la cuenta ${maskAccount(selectedAccount)} por ${formatCurrency(
-                kind === 'RECARGA' ? selectedProduct.price : Number(amount),
-              )}. Se solicitará tu huella digital.`
-            : ''
-        }
+        title="Resumen y confirmación de pago"
         onRequestClose={() => setConfirmOpen(false)}
         actions={
           <>
             <Button
-              title="Autorizar con huella y pagar"
+              title="Confirmar con contraseña y pagar"
               loading={payMutation.isPending}
-              onPress={() => void handleConfirmPay()}
+              onPress={() => void handleConfirmPay('PASSWORD')}
             />
+            {Platform.OS !== 'web' && biometricAvailable ? (
+              <Button
+                title="Autorizar con huella digital"
+                variant="secondary"
+                loading={payMutation.isPending}
+                onPress={() => void handleConfirmPay('BIOMETRIC')}
+              />
+            ) : null}
             <Button title="Cancelar" variant="ghost" onPress={() => setConfirmOpen(false)} />
           </>
         }
-      />
+      >
+        {selectedProduct ? (
+          <View style={styles.summaryBox}>
+            <View style={styles.summaryHeader}>
+              <ProviderLogo
+                name={selectedProduct.serviceName}
+                logoUrl={selectedProduct.logoUrl}
+                size={40}
+              />
+              <View style={styles.summaryHeaderTexts}>
+                <Text style={styles.summaryService}>{selectedProduct.serviceName}</Text>
+                <Text style={styles.summaryProduct}>{selectedProduct.name}</Text>
+              </View>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>
+                {kind === 'RECARGA' ? 'Teléfono destino' : 'Referencia validada'}
+              </Text>
+              <Text style={styles.summaryValue}>
+                {kind === 'RECARGA' ? phone.trim() : reference.trim()}
+              </Text>
+            </View>
+            {kind === 'SERVICIO' && referenceValidation?.valid ? (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Estado validación</Text>
+                <Text style={styles.summaryValue}>Válida ({referenceValidation.serviceName})</Text>
+              </View>
+            ) : null}
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Cuenta de cargo</Text>
+              <Text style={styles.summaryValue}>{maskAccount(selectedAccount)}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Importe</Text>
+              <Text style={styles.summaryAmount}>{formatCurrency(effectiveAmount)}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Comisión al cliente</Text>
+              <Text style={styles.summaryValue}>{formatCurrency(0)} (absorbida por el banco)</Text>
+            </View>
+          </View>
+        ) : null}
+
+        <Input
+          label="Contraseña de tu cuenta"
+          placeholder="Ingresa tu contraseña para confirmar"
+          secureTextEntry
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+        />
+        {confirmError ? (
+          <Text accessibilityRole="alert" style={styles.error}>
+            {confirmError}
+          </Text>
+        ) : null}
+      </AppModal>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   title: { ...typography.title, color: colors.primary },
-  webBanner: {
-    backgroundColor: colors.warningBg,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    gap: spacing.xs,
-  },
-  webBannerTitle: { ...typography.subheading, color: colors.warning },
-  webBannerText: { ...typography.caption, color: colors.text },
   tabs: { flexDirection: 'row', gap: spacing.sm },
   tab: {
     flex: 1,
@@ -332,5 +557,47 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { ...typography.caption, color: colors.text },
   chipTextActive: { color: colors.textOnPrimary, fontWeight: '600' },
+  validationBox: {
+    borderRadius: radii.md,
+    padding: spacing.md,
+    gap: spacing.xs,
+    borderWidth: 1,
+  },
+  validationBoxSuccess: {
+    backgroundColor: colors.successBg,
+    borderColor: colors.success,
+  },
+  validationBoxError: {
+    backgroundColor: colors.dangerBg,
+    borderColor: colors.danger,
+  },
+  validationTitle: { ...typography.subheading, color: colors.text },
+  validationText: { ...typography.body, color: colors.text },
+  validationMeta: { ...typography.caption, color: colors.textMuted },
+  summaryBox: {
+    backgroundColor: colors.background,
+    borderRadius: radii.md,
+    padding: spacing.md,
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  summaryHeaderTexts: { flex: 1 },
+  summaryService: { ...typography.caption, color: colors.textMuted, fontWeight: '700' },
+  summaryProduct: { ...typography.subheading, color: colors.primary },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  summaryLabel: { ...typography.caption, color: colors.textMuted },
+  summaryValue: { ...typography.caption, color: colors.text, fontWeight: '600' },
+  summaryAmount: { ...typography.subheading, color: colors.primary, fontWeight: '700' },
   error: { ...typography.caption, color: colors.danger },
 });

@@ -6,4 +6,5 @@ export { ErrorState } from './ErrorState';
 export { Input } from './Input';
 export { ListItem } from './ListItem';
 export { Loader } from './Loader';
+export { ProviderLogo } from './ProviderLogo';
 export { Screen } from './Screen';

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
-import { Button, Input } from '@/shared/ui';
+import { Button, Input, ProviderLogo } from '@/shared/ui';
 
 describe('Componentes UI compartidos', () => {
   it('Button ejecuta onPress y se deshabilita durante loading', async () => {
@@ -28,5 +28,13 @@ describe('Componentes UI compartidos', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('El correo es obligatorio');
     await fireEvent.changeText(screen.getByLabelText('Correo electrónico'), 'test@banco.com');
     expect(onChangeText).toHaveBeenCalledWith('test@banco.com');
+  });
+
+  it('ProviderLogo muestra avatar neutro con iniciales cuando no hay logoUrl', async () => {
+    await render(<ProviderLogo name="Telcel" />);
+    expect(screen.getByText('TE')).toBeTruthy();
+
+    await render(<ProviderLogo name="Comisión Federal" />);
+    expect(screen.getByText('CF')).toBeTruthy();
   });
 });

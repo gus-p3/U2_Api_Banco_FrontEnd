@@ -1,25 +1,33 @@
 import { AppError } from '@/core/errors/AppError';
 import { messageForCode } from '@/core/errors/errorMessages';
-import { isAppError } from '@/core/errors/AppError';
 
-import type { PaymentInput, PaymentReceipt, Product } from './entities';
+import type {
+  PaymentInput,
+  PaymentReceipt,
+  Product,
+  ReferenceValidationInput,
+  ReferenceValidationResult,
+} from './entities';
 
 export interface PaymentsRepository {
   getProducts(): Promise<Product[]>;
-  pay(input: PaymentInput): Promise<PaymentReceipt>;
+  validateReference(input: ReferenceValidationInput): Promise<ReferenceValidationResult>;
+  pay(input: PaymentInput, confirmationToken: string): Promise<PaymentReceipt>;
+  getPaymentStatus(idOrUpc: string, fallback?: PaymentReceipt): Promise<PaymentReceipt>;
 }
 
 export interface PayDeps {
   repo: PaymentsRepository;
-  /** Método con el que se obtuvo el token vigente. */
-  getAuthMethod: () => string | undefined;
-  /** Obtiene un token con huella (pide biometría local). */
-  reauthenticateWithFingerprint: () => Promise<void>;
-  /** Pagos solo en Android (el web no tiene huella). */
-  isSupportedPlatform: () => boolean;
+  /** Obtiene un token de confirmación de un solo uso con la contraseña del usuario. */
+  confirmWithPassword?: (password: string) => Promise<string>;
+  /** Obtiene un token de confirmación de un solo uso con huella digital (móvil). */
+  confirmWithFingerprint?: () => Promise<string>;
 }
 
-const failWith = (code: 'UNSUPPORTED_PLATFORM' | 'INVALID_PAYMENT_REQUEST', message?: string): never => {
+const failWith = (
+  code: 'STRONG_AUTH_REQUIRED' | 'INVALID_PAYMENT_REQUEST' | 'REFERENCE_NOT_VALIDATED',
+  message?: string,
+): never => {
   throw new AppError({ code, message: message ?? messageForCode(code) });
 };
 
@@ -40,31 +48,43 @@ export function validatePaymentInput(input: PaymentInput): void {
     if (!input.amount || input.amount <= 0 || Math.round(input.amount * 100) / 100 !== input.amount) {
       failWith('INVALID_PAYMENT_REQUEST', 'Captura un monto mayor a 0 con máximo 2 decimales.');
     }
+    if (!input.referenceValidated) {
+      failWith('REFERENCE_NOT_VALIDATED');
+    }
   }
 }
 
 /**
- * Caso de uso: pagar recarga o servicio.
- * El backend exige un JWT de huella; si el token vigente es de otro tipo (login con contraseña
- * o token refrescado) se pide la huella y, ante STRONG_AUTH_REQUIRED, se reintenta una vez.
+ * Caso de uso: pagar recarga o servicio (en web y móvil).
+ * Requiere reautenticación reciente mediante contraseña o huella digital para obtener un
+ * token de confirmación de un solo uso (header X-Confirmation-Token).
  */
 export async function payProduct(deps: PayDeps, input: PaymentInput): Promise<PaymentReceipt> {
-  if (!deps.isSupportedPlatform()) return failWith('UNSUPPORTED_PLATFORM');
   validatePaymentInput(input);
 
-  if (deps.getAuthMethod() !== 'BIOMETRIC_HUELLA') {
-    await deps.reauthenticateWithFingerprint();
+  let confirmationToken = input.confirmationToken?.trim();
+
+  if (!confirmationToken) {
+    if (input.useBiometricConfirmation) {
+      if (!deps.confirmWithFingerprint) {
+        return failWith('STRONG_AUTH_REQUIRED');
+      }
+      confirmationToken = await deps.confirmWithFingerprint();
+    } else if (input.confirmationPassword && input.confirmationPassword.trim().length > 0) {
+      if (!deps.confirmWithPassword) {
+        return failWith('STRONG_AUTH_REQUIRED');
+      }
+      confirmationToken = await deps.confirmWithPassword(input.confirmationPassword);
+    } else {
+      return failWith('STRONG_AUTH_REQUIRED');
+    }
   }
 
-  try {
-    return await deps.repo.pay(input);
-  } catch (error) {
-    if (isAppError(error) && error.code === 'STRONG_AUTH_REQUIRED') {
-      await deps.reauthenticateWithFingerprint();
-      return deps.repo.pay(input);
-    }
-    throw error;
+  if (!confirmationToken) {
+    return failWith('STRONG_AUTH_REQUIRED');
   }
+
+  return deps.repo.pay(input, confirmationToken);
 }
 
 export const kindFromProduct = (product: Product): 'RECARGA' | 'SERVICIO' | 'OTRO' => product.kind;

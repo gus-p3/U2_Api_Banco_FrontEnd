@@ -1,16 +1,64 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { toAppError } from '@/core/errors/toAppError';
 import { formatCurrency, formatDateTime, maskAccount } from '@/core/utils/format';
 import { colors, radii, spacing, typography } from '@/shared/theme';
-import { Button, Card, EmptyState, Screen } from '@/shared/ui';
+import { Button, Card, EmptyState, ProviderLogo, Screen } from '@/shared/ui';
 
-import { receiptStore } from './hooks';
+import type { PaymentReceipt, PaymentStatus } from '../domain/entities';
+import { receiptStore, useRefreshReceipt } from './hooks';
+
+interface StatusPresentation {
+  title: string;
+  badgeLabel: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  bgColor: string;
+  fgColor: string;
+  isPending: boolean;
+}
+
+function getStatusPresentation(status: PaymentStatus): StatusPresentation {
+  switch (status) {
+    case 'APLICADO':
+      return {
+        title: 'Pago aplicado exitosamente',
+        badgeLabel: 'APLICADO',
+        icon: 'checkmark-circle',
+        bgColor: colors.successBg,
+        fgColor: colors.success,
+        isPending: false,
+      };
+    case 'RECHAZADO':
+      return {
+        title: 'Pago rechazado',
+        badgeLabel: 'RECHAZADO',
+        icon: 'close-circle',
+        bgColor: colors.dangerBg,
+        fgColor: colors.danger,
+        isPending: false,
+      };
+    case 'POR_CONFIRMAR':
+    case 'PENDIENTE':
+    default:
+      return {
+        title: 'Pago en proceso de confirmación',
+        badgeLabel: status === 'POR_CONFIRMAR' ? 'POR CONFIRMAR' : 'PENDIENTE',
+        icon: 'time-outline',
+        bgColor: colors.warningBg,
+        fgColor: colors.warning,
+        isPending: true,
+      };
+  }
+}
 
 export function ReceiptScreen() {
   const router = useRouter();
-  const receipt = receiptStore.get();
+  const [receipt, setReceipt] = useState<PaymentReceipt | null>(() => receiptStore.get());
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const refreshMutation = useRefreshReceipt();
 
   if (!receipt) {
     return (
@@ -24,47 +72,102 @@ export function ReceiptScreen() {
     );
   }
 
+  const ui = getStatusPresentation(receipt.status);
+  const lookupKey = receipt.upc ?? (receipt.id ? String(receipt.id) : undefined);
+
+  const handleRefresh = async () => {
+    if (!lookupKey) return;
+    setRefreshError(null);
+    try {
+      const updated = await refreshMutation.mutateAsync({
+        idOrUpc: lookupKey,
+        current: receipt,
+      });
+      setReceipt(updated);
+    } catch (e) {
+      setRefreshError(toAppError(e).message);
+    }
+  };
+
   return (
-    <Screen>
+    <Screen
+      refreshing={refreshMutation.isPending}
+      onRefresh={lookupKey ? () => void handleRefresh() : undefined}
+    >
       <Card style={styles.card}>
         <View style={styles.badgeWrap}>
-          <View
-            style={[
-              styles.iconCircle,
-              { backgroundColor: receipt.applied ? colors.successBg : colors.warningBg },
-            ]}
-          >
-            <Ionicons
-              name={receipt.applied ? 'checkmark-circle' : 'time-outline'}
-              size={44}
-              color={receipt.applied ? colors.success : colors.warning}
-            />
+          <View style={[styles.iconCircle, { backgroundColor: ui.bgColor }]}>
+            <Ionicons name={ui.icon} size={44} color={ui.fgColor} />
           </View>
-          <Text style={styles.status}>
-            {receipt.applied ? 'Pago aplicado' : `Estado: ${receipt.status}`}
-          </Text>
+          <View style={[styles.statusPill, { backgroundColor: ui.bgColor }]}>
+            <Text style={[styles.statusPillText, { color: ui.fgColor }]}>{ui.badgeLabel}</Text>
+          </View>
+          <Text style={styles.status}>{ui.title}</Text>
           <Text style={styles.amount}>{formatCurrency(receipt.amount)}</Text>
           <Text style={styles.message}>{receipt.message}</Text>
         </View>
 
+        {ui.isPending ? (
+          <View style={styles.pendingAlert} accessibilityRole="alert">
+            <Text style={styles.pendingAlertTitle}>Operación aún no confirmada como aplicada</Text>
+            <Text style={styles.pendingAlertText}>
+              El proveedor GestoPago está procesando la confirmación de esta transacción. Puedes
+              actualizar el estado desde aquí usando tu folio UPC.
+            </Text>
+          </View>
+        ) : null}
+
+        {receipt.status === 'RECHAZADO' ? (
+          <View style={styles.rejectedAlert} accessibilityRole="alert">
+            <Text style={styles.rejectedAlertTitle}>Transacción no aplicada</Text>
+            <Text style={styles.rejectedAlertText}>
+              El pago fue rechazado por el proveedor y el importe fue devuelto a tu cuenta.
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.divider} />
+
+        <View style={styles.providerHeader}>
+          <ProviderLogo name={receipt.serviceName} logoUrl={receipt.logoUrl} size={40} />
+          <View style={styles.providerTexts}>
+            <Text style={styles.providerService}>{receipt.serviceName}</Text>
+            <Text style={styles.providerProduct}>{receipt.productName}</Text>
+          </View>
+        </View>
 
         <Row
           label="Operación"
           value={receipt.kind === 'RECARGA' ? 'Recarga móvil' : 'Pago de servicio'}
         />
-        <Row label="Compañía / Producto" value={`${receipt.serviceName} · ${receipt.productName}`} />
         <Row
           label={receipt.kind === 'RECARGA' ? 'Teléfono abonado' : 'Referencia'}
           value={receipt.destination}
         />
         <Row label="Cuenta de cargo" value={maskAccount(receipt.accountNumber)} />
-        {receipt.authorization ? <Row label="Autorización" value={receipt.authorization} /> : null}
+        {receipt.authorization ? (
+          <Row label="Folio de autorización" value={receipt.authorization} />
+        ) : null}
         {receipt.transactionId ? (
-          <Row label="ID Transacción" value={String(receipt.transactionId)} />
+          <Row label="ID Transacción (idTx)" value={String(receipt.transactionId)} />
         ) : null}
         {receipt.upc ? <Row label="Folio UPC" value={receipt.upc} /> : null}
         <Row label="Fecha y hora" value={formatDateTime(receipt.createdAt)} />
+
+        {refreshError ? (
+          <Text accessibilityRole="alert" style={styles.error}>
+            {refreshError}
+          </Text>
+        ) : null}
+
+        {ui.isPending && lookupKey ? (
+          <Button
+            title="Actualizar estado del pago"
+            variant="secondary"
+            loading={refreshMutation.isPending}
+            onPress={() => void handleRefresh()}
+          />
+        ) : null}
 
         <Button
           title="Volver al inicio"
@@ -97,10 +200,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  status: { ...typography.subheading, color: colors.primary },
+  statusPill: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
+  },
+  statusPillText: {
+    ...typography.caption,
+    fontWeight: '700',
+  },
+  status: { ...typography.subheading, color: colors.primary, textAlign: 'center' },
   amount: { ...typography.amount, color: colors.primary },
   message: { ...typography.caption, color: colors.textMuted, textAlign: 'center' },
+  pendingAlert: {
+    backgroundColor: colors.warningBg,
+    borderRadius: radii.md,
+    padding: spacing.md,
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.warning,
+  },
+  pendingAlertTitle: { ...typography.subheading, color: colors.warning },
+  pendingAlertText: { ...typography.caption, color: colors.text },
+  rejectedAlert: {
+    backgroundColor: colors.dangerBg,
+    borderRadius: radii.md,
+    padding: spacing.md,
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.danger,
+  },
+  rejectedAlertTitle: { ...typography.subheading, color: colors.danger },
+  rejectedAlertText: { ...typography.caption, color: colors.text },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.xs },
+  providerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  providerTexts: { flex: 1 },
+  providerService: { ...typography.caption, color: colors.textMuted, fontWeight: '700' },
+  providerProduct: { ...typography.subheading, color: colors.text },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
   rowLabel: { ...typography.caption, color: colors.textMuted },
   rowVal: {
@@ -110,4 +250,5 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     textAlign: 'right',
   },
+  error: { ...typography.caption, color: colors.danger },
 });

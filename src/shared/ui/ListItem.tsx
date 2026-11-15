@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, layout, radii, spacing, typography } from '../theme';
@@ -13,6 +13,8 @@ export interface ListItemProps {
   trailing?: string;
   trailingTone?: 'default' | 'positive' | 'negative';
   icon?: IconName;
+  /** Elemento visual personalizado a la izquierda (p. ej. ProviderLogo). */
+  leading?: ReactNode;
   onPress?: () => void;
   showChevron?: boolean;
 }
@@ -23,12 +25,15 @@ function ListItemBase({
   trailing,
   trailingTone = 'default',
   icon,
+  leading,
   onPress,
   showChevron,
 }: ListItemProps) {
   const content = (
     <View style={styles.row}>
-      {icon ? (
+      {leading ? (
+        leading
+      ) : icon ? (
         <View style={styles.iconWrap}>
           <Ionicons name={icon} size={20} color={colors.primary} />
         </View>

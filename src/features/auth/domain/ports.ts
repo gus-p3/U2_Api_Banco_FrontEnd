@@ -6,6 +6,12 @@ export interface AuthRepository {
   loginBiometric(email: string, biometricType: BiometricType, secret: string): Promise<AuthResult>;
   enrollBiometric(idClient: number, biometricType: BiometricType, secret: string): Promise<void>;
   refresh(refreshToken: string): Promise<AuthResult>;
+  /** Confirma una operación sensible (ej. pago) con contraseña o huella y devuelve un token de un solo uso. */
+  confirmOperation(params: {
+    password?: string;
+    biometricType?: BiometricType;
+    biometricData?: string;
+  }): Promise<string>;
   /** Revoca el refresh token del usuario del JWT actual. */
   logout(): Promise<void>;
 }

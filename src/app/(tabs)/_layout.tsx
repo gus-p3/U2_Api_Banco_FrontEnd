@@ -35,11 +35,29 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="catalog"
+        options={{
+          title: 'Catálogo',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="grid-outline" size={size} color={String(color)} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="payments"
         options={{
           title: 'Pagos',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="flash-outline" size={size} color={String(color)} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="history"
+        options={{
+          title: 'Historial',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="time-outline" size={size} color={String(color)} />
           ),
         }}
       />

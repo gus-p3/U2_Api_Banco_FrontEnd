@@ -6,6 +6,7 @@ import { createAuthRepository } from '@/features/auth/data/authRepository';
 import { loginWithBiometrics, loginWithPassword } from '@/features/auth/domain/usecases';
 import { createAccountsRepository } from '@/features/accounts/data/accountsRepository';
 import { getRecentMovements, totalBalance } from '@/features/accounts/domain/repository';
+import { createHistoryRepository } from '@/features/history/data/historyRepository';
 import { createPaymentsRepository } from '@/features/payments/data/paymentsRepository';
 import { payProduct } from '@/features/payments/domain/usecases';
 
@@ -213,7 +214,7 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
     expect(movs[0]?.signedAmount).toBe(25000);
   });
 
-  it('payProduct re-autentica con huella cuando el token no es BIOMETRIC_HUELLA y envía solo campos permitidos', async () => {
+  it('payProduct solicita confirmación reciente (contraseña o huella) y envía X-Confirmation-Token en web y móvil', async () => {
     const post = jest.fn().mockResolvedValue({
       data: {
         codigo: 1,
@@ -224,22 +225,20 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
       },
     });
     const repo = createPaymentsRepository({ post, get: jest.fn() } as unknown as AxiosInstance);
-    let authMethod = 'PASSWORD';
-    const reauth = jest.fn(async () => {
-      authMethod = 'BIOMETRIC_HUELLA';
-    });
+    const confirmWithPassword = jest.fn(async (pwd: string) => `confirm-token-${pwd}`);
+    const confirmWithFingerprint = jest.fn(async () => 'confirm-token-bio');
 
     const receipt = await payProduct(
       {
         repo,
-        getAuthMethod: () => authMethod,
-        reauthenticateWithFingerprint: reauth,
-        isSupportedPlatform: () => true,
+        confirmWithPassword,
+        confirmWithFingerprint,
       },
       {
         accountNumber: '9876543210',
         kind: 'RECARGA',
         phone: '5512345678',
+        confirmationPassword: 'PasswordSegura#2026',
         product: {
           id: 1,
           name: 'Telcel 100',
@@ -254,15 +253,331 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
       },
     );
 
-    expect(reauth).toHaveBeenCalledTimes(1);
-    expect(post).toHaveBeenCalledWith('/v1/pagos', {
-      numCuenta: '9876543210',
-      idServicio: 133,
-      idProducto: 582,
-      tipoPago: 'RECARGA',
-      telefono: '5512345678',
-    });
+    expect(confirmWithPassword).toHaveBeenCalledWith('PasswordSegura#2026');
+    expect(post).toHaveBeenCalledWith(
+      '/v1/pagos',
+      {
+        numCuenta: '9876543210',
+        idServicio: 133,
+        idProducto: 582,
+        tipoPago: 'RECARGA',
+        telefono: '5512345678',
+      },
+      {
+        headers: { 'X-Confirmation-Token': 'confirm-token-PasswordSegura#2026' },
+      },
+    );
     expect(receipt.applied).toBe(true);
     expect(receipt.authorization).toBe('AUTH123');
+
+    // También soporta confirmación biométrica en móvil
+    await payProduct(
+      {
+        repo,
+        confirmWithPassword,
+        confirmWithFingerprint,
+      },
+      {
+        accountNumber: '9876543210',
+        kind: 'RECARGA',
+        phone: '5512345678',
+        useBiometricConfirmation: true,
+        product: {
+          id: 1,
+          name: 'Telcel 100',
+          serviceName: 'Telcel',
+          idServicio: 133,
+          idProducto: 582,
+          kind: 'RECARGA',
+          price: 100,
+          hasCheckDigit: false,
+          helpAvailable: false,
+        },
+      },
+    );
+    expect(confirmWithFingerprint).toHaveBeenCalledTimes(1);
+
+    // Rechaza con STRONG_AUTH_REQUIRED si no se proporciona confirmación
+    await expect(
+      payProduct(
+        { repo, confirmWithPassword, confirmWithFingerprint },
+        {
+          accountNumber: '9876543210',
+          kind: 'RECARGA',
+          phone: '5512345678',
+          product: {
+            id: 1,
+            name: 'Telcel 100',
+            serviceName: 'Telcel',
+            idServicio: 133,
+            idProducto: 582,
+            kind: 'RECARGA',
+            price: 100,
+            hasCheckDigit: false,
+            helpAvailable: false,
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'STRONG_AUTH_REQUIRED' });
+  });
+
+  it('getProducts devuelve vacío si el backend devuelve vacío (sin datos simulados) y mapea legend y categoría', async () => {
+    const getEmpty = jest.fn().mockResolvedValue({ data: [] });
+    const repoEmpty = createPaymentsRepository({
+      post: jest.fn(),
+      get: getEmpty,
+    } as unknown as AxiosInstance);
+    expect(await repoEmpty.getProducts()).toEqual([]);
+
+    const getCatalog = jest.fn().mockResolvedValue({
+      data: [
+        {
+          id: 10,
+          producto: 'Recarga 50',
+          servicio: 'Telcel',
+          idServicio: 133,
+          idProducto: 581,
+          idCatTipoServicio: 1,
+          tipoFront: 1,
+          precio: '50.00',
+          legend: 'Ingresa los 10 dígitos de tu línea Telcel',
+          categoria: 'Recargas',
+        },
+      ],
+    });
+    const repoCatalog = createPaymentsRepository({
+      post: jest.fn(),
+      get: getCatalog,
+    } as unknown as AxiosInstance);
+    const items = await repoCatalog.getProducts();
+    expect(items).toHaveLength(1);
+    expect(items[0]?.description).toBe('Ingresa los 10 dígitos de tu línea Telcel');
+    expect(items[0]?.category).toBe('Recargas');
+  });
+
+  it('Fase 4: validateReference distingue referencia válida, inválida y bloquea pago de servicio sin validar', async () => {
+    const post = jest
+      .fn()
+      .mockResolvedValueOnce({
+        data: {
+          valida: true,
+          estadoValidacion: 'VALIDA',
+          validationId: 'val-123',
+          idServicio: 79,
+          idProducto: 209,
+          referencia: '998877665544',
+          nombreServicio: 'CFE',
+          nombreProducto: 'Luz CFE',
+          categoria: 'Servicios',
+          descripcion: 'Pago de recibo CFE',
+          mensaje: 'Referencia verificada correctamente',
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          valida: false,
+          estadoValidacion: 'INVALIDA',
+          idServicio: 79,
+          idProducto: 209,
+          referencia: '0000000000',
+          nombreServicio: 'CFE',
+          nombreProducto: 'Luz CFE',
+          mensaje: 'Referencia rechazada por el proveedor',
+        },
+      });
+
+    const repo = createPaymentsRepository({ post, get: jest.fn() } as unknown as AxiosInstance);
+
+    const validRes = await repo.validateReference({
+      idServicio: 79,
+      idProducto: 209,
+      reference: '998877665544',
+      amount: 150,
+    });
+    expect(validRes.valid).toBe(true);
+    expect(validRes.validationId).toBe('val-123');
+    expect(validRes.serviceName).toBe('CFE');
+
+    const invalidRes = await repo.validateReference({
+      idServicio: 79,
+      idProducto: 209,
+      reference: '0000000000',
+      amount: 150,
+    });
+    expect(invalidRes.valid).toBe(false);
+    expect(invalidRes.message).toContain('rechazada');
+
+    // Intento de pago de SERVICIO sin haber validado la referencia falla con REFERENCE_NOT_VALIDATED
+    await expect(
+      payProduct(
+        {
+          repo,
+          confirmWithPassword: async () => 'confirm-tok',
+        },
+        {
+          accountNumber: '9876543210',
+          kind: 'SERVICIO',
+          reference: '998877665544',
+          amount: 150,
+          referenceValidated: false,
+          confirmationPassword: 'PasswordSegura#2026',
+          product: {
+            id: 2,
+            name: 'Luz CFE',
+            serviceName: 'CFE',
+            idServicio: 79,
+            idProducto: 209,
+            kind: 'SERVICIO',
+            hasCheckDigit: true,
+            helpAvailable: true,
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'REFERENCE_NOT_VALIDATED' });
+  });
+
+  it('Fase 5: applied solo es true con estado === APLICADO y getPaymentStatus refresca un recibo POR_CONFIRMAR', async () => {
+    const post = jest
+      .fn()
+      .mockResolvedValueOnce({
+        data: {
+          codigo: 1, // incluso si codigo viniera en 1 por error, estado POR_CONFIRMAR nunca es applied=true
+          mensaje: 'Pago en proceso de confirmación',
+          estado: 'POR_CONFIRMAR',
+          upc: 'UPC123456',
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          codigo: 0,
+          mensaje: 'Saldo insuficiente del distribuidor',
+          estado: 'RECHAZADO',
+          upc: 'UPC123457',
+        },
+      });
+
+    const get = jest.fn().mockResolvedValueOnce({
+      data: {
+        id: 45,
+        codigo: 1,
+        mensaje: 'Transacción confirmada',
+        estado: 'APLICADO',
+        tipoPago: 'RECARGA',
+        numCuenta: '9876543210',
+        idServicio: 133,
+        idProducto: 582,
+        nombreServicio: 'Telcel',
+        nombreProducto: 'Telcel 100',
+        telefono: '5512345678',
+        monto: 100,
+        numAutorizacion: 'AUTH-OK-99',
+        idTx: 777111,
+        upc: 'UPC123456',
+      },
+    });
+
+    const repo = createPaymentsRepository({ post, get } as unknown as AxiosInstance);
+    const product = {
+      id: 1,
+      name: 'Telcel 100',
+      serviceName: 'Telcel',
+      idServicio: 133,
+      idProducto: 582,
+      kind: 'RECARGA' as const,
+      price: 100,
+      hasCheckDigit: false,
+      helpAvailable: false,
+    };
+
+    const pendingReceipt = await repo.pay(
+      { accountNumber: '9876543210', kind: 'RECARGA', phone: '5512345678', product },
+      'tok-1',
+    );
+    expect(pendingReceipt.status).toBe('POR_CONFIRMAR');
+    expect(pendingReceipt.applied).toBe(false);
+
+    const rejectedReceipt = await repo.pay(
+      { accountNumber: '9876543210', kind: 'RECARGA', phone: '5512345678', product },
+      'tok-2',
+    );
+    expect(rejectedReceipt.status).toBe('RECHAZADO');
+    expect(rejectedReceipt.applied).toBe(false);
+
+    const refreshed = await repo.getPaymentStatus('UPC123456', pendingReceipt);
+    expect(refreshed.status).toBe('APLICADO');
+    expect(refreshed.applied).toBe(true);
+    expect(refreshed.authorization).toBe('AUTH-OK-99');
+    expect(refreshed.transactionId).toBe(777111);
+  });
+
+  it('Fase 6: createHistoryRepository consulta listado paginado con referencia enmascarada y detalle por id', async () => {
+    const get = jest
+      .fn()
+      .mockResolvedValueOnce({
+        data: {
+          content: [
+            {
+              id: 101,
+              codigo: 1,
+              mensaje: 'Pago aplicado',
+              estado: 'APLICADO',
+              tipoPago: 'SERVICIO',
+              numCuenta: '9876543210',
+              idServicio: 79,
+              idProducto: 209,
+              nombreServicio: 'CFE',
+              nombreProducto: 'Luz CFE',
+              referencia: '********7271',
+              destinoEnmascarado: '********7271',
+              monto: 150,
+              numAutorizacion: 'AUTH-CFE-01',
+              idTx: 555001,
+              upc: 'UPCCFE001',
+              fechaCreacion: '2026-11-15T12:00:00Z',
+            },
+          ],
+          page: 0,
+          size: 10,
+          totalElements: 1,
+          totalPages: 1,
+          last: true,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          id: 101,
+          codigo: 1,
+          mensaje: 'Pago aplicado',
+          estado: 'APLICADO',
+          tipoPago: 'SERVICIO',
+          numCuenta: '9876543210',
+          idServicio: 79,
+          idProducto: 209,
+          nombreServicio: 'CFE',
+          nombreProducto: 'Luz CFE',
+          referencia: '40425475190118187271',
+          destinoEnmascarado: '********7271',
+          monto: 150,
+          numAutorizacion: 'AUTH-CFE-01',
+          idTx: 555001,
+          upc: 'UPCCFE001',
+          fechaCreacion: '2026-11-15T12:00:00Z',
+        },
+      });
+
+    const historyRepo = createHistoryRepository({ get } as unknown as AxiosInstance);
+
+    const pageRes = await historyRepo.getHistory({ estado: 'APLICADO', page: 0, size: 10 });
+    expect(get).toHaveBeenCalledWith('/v1/pagos', {
+      params: { estado: 'APLICADO', page: 0, size: 10 },
+    });
+    expect(pageRes.totalElements).toBe(1);
+    expect(pageRes.items[0]?.maskedDestination).toBe('********7271');
+    expect(pageRes.items[0]?.applied).toBe(true);
+
+    const detail = await historyRepo.getHistoryDetail('101');
+    expect(get).toHaveBeenCalledWith('/v1/pagos/101');
+    expect(detail.fullDestination).toBe('40425475190118187271');
+    expect(detail.authorization).toBe('AUTH-CFE-01');
   });
 });

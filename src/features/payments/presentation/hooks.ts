@@ -1,23 +1,54 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Platform } from 'react-native';
 
 import { accountKeys } from '@/features/accounts/presentation/hooks';
-import { reauthenticateWithFingerprint } from '@/features/auth/presentation/authActions';
-import { useSessionStore } from '@/features/auth/presentation/sessionStore';
+import {
+  confirmPaymentWithFingerprint,
+  confirmPaymentWithPassword,
+} from '@/features/auth/presentation/authActions';
 
 import { paymentsRepository } from '../data/paymentsRepository';
-import type { PaymentInput, PaymentReceipt } from '../domain/entities';
+import type {
+  PaymentInput,
+  PaymentReceipt,
+  ReferenceValidationInput,
+  ReferenceValidationResult,
+} from '../domain/entities';
 import { payProduct } from '../domain/usecases';
 
 export const paymentKeys = { products: ['payment-products'] as const };
 
-export const isPaymentsSupported = (): boolean => Platform.OS !== 'web';
+/** Los pagos están soportados tanto en Web como en Android con reautenticación. */
+export const isPaymentsSupported = (): boolean => true;
 
 export function useProducts() {
   return useQuery({
     queryKey: paymentKeys.products,
     queryFn: () => paymentsRepository.getProducts(),
     staleTime: 10 * 60 * 1000, // el catálogo se cachea también en Redis en el servidor
+  });
+}
+
+export function useValidateReference() {
+  return useMutation<ReferenceValidationResult, Error, ReferenceValidationInput>({
+    mutationFn: (input) => paymentsRepository.validateReference(input),
+    retry: false,
+  });
+}
+
+export function useRefreshReceipt() {
+  const queryClient = useQueryClient();
+  return useMutation<PaymentReceipt, Error, { idOrUpc: string; current?: PaymentReceipt }>({
+    mutationFn: ({ idOrUpc, current }) => paymentsRepository.getPaymentStatus(idOrUpc, current),
+    retry: false,
+    onSuccess: async (updated) => {
+      receiptStore.set(updated);
+      await queryClient.invalidateQueries({ queryKey: accountKeys.customer });
+      if (updated.accountNumber) {
+        await queryClient.invalidateQueries({
+          queryKey: accountKeys.movements(updated.accountNumber),
+        });
+      }
+    },
   });
 }
 
@@ -28,9 +59,8 @@ export function usePay() {
       payProduct(
         {
           repo: paymentsRepository,
-          getAuthMethod: () => useSessionStore.getState().session?.authMethod,
-          reauthenticateWithFingerprint,
-          isSupportedPlatform: isPaymentsSupported,
+          confirmWithPassword: confirmPaymentWithPassword,
+          confirmWithFingerprint: confirmPaymentWithFingerprint,
         },
         input,
       ),
@@ -38,6 +68,7 @@ export function usePay() {
     onSuccess: async (_receipt, input) => {
       await queryClient.invalidateQueries({ queryKey: accountKeys.customer });
       await queryClient.invalidateQueries({ queryKey: accountKeys.movements(input.accountNumber) });
+      await queryClient.invalidateQueries({ queryKey: ['payment-history'] });
     },
   });
 }

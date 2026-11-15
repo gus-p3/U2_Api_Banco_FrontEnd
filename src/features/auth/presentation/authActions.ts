@@ -1,6 +1,8 @@
 import { authDeps } from '../di';
 import type { AuthResult } from '../domain/entities';
 import {
+  confirmOperationWithBiometrics,
+  confirmOperationWithPassword,
   enableBiometrics,
   loginWithBiometrics,
   loginWithPassword,
@@ -29,13 +31,35 @@ export async function signInWithBiometrics(email: string): Promise<void> {
   await persistAndSet(result);
 }
 
-/** Re-autentica con huella para obtener un token con authMethod=BIOMETRIC_HUELLA (requerido para pagar). */
+/** Re-autentica con huella para obtener un token con authMethod=BIOMETRIC_HUELLA. */
 export async function reauthenticateWithFingerprint(): Promise<void> {
   const email = useSessionStore.getState().session?.email;
   if (!email) throw new Error('Sin sesión activa');
   const result = await loginWithBiometrics(authDeps, email);
   await authDeps.store.saveRefreshToken(result.tokens.refreshToken);
   useSessionStore.getState().updateTokens(result.session, result.tokens);
+}
+
+/** Obtiene un token de confirmación de un solo uso validando la contraseña actual del cliente. */
+export async function confirmPaymentWithPassword(password: string): Promise<string> {
+  return confirmOperationWithPassword(authDeps, password);
+}
+
+/** Obtiene un token de confirmación de un solo uso validando la huella digital registrada. */
+export async function confirmPaymentWithFingerprint(): Promise<string> {
+  const email = useSessionStore.getState().session?.email;
+  if (!email) throw new Error('Sin sesión activa');
+  return confirmOperationWithBiometrics(authDeps, email);
+}
+
+/** Indica si el dispositivo móvil tiene biometría disponible y enrolada para el usuario actual. */
+export async function isBiometricConfirmationAvailable(): Promise<boolean> {
+  const email = useSessionStore.getState().session?.email;
+  if (!email) return false;
+  const available = await authDeps.biometrics.isAvailable();
+  if (!available) return false;
+  const secret = await authDeps.store.getBiometricSecret(email);
+  return Boolean(secret);
 }
 
 export async function activateBiometrics(): Promise<void> {

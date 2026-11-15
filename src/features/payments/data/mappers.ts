@@ -1,11 +1,51 @@
-import type { PaymentInput, PaymentReceipt, Product } from '../domain/entities';
-import type { PagoRequestDto, PagoResponseDto, ProductDto } from './dto';
+import type {
+  PaymentInput,
+  PaymentReceipt,
+  Product,
+  ReferenceValidationResult,
+} from '../domain/entities';
+import type {
+  PagoDetalleDto,
+  PagoRequestDto,
+  PagoResponseDto,
+  ProductDto,
+  ValidateReferenceResponseDto,
+} from './dto';
 
 const parsePrice = (precio: string | undefined): number | undefined => {
   if (!precio) return undefined;
   const n = Number(precio.replace(/[^0-9.]/g, ''));
   return Number.isFinite(n) && n > 0 ? n : undefined;
 };
+
+/** Traduce la categoría desde idCatTipoServicio y tipoFront cuando el backend no la envía ya traducida. */
+export function translateCategory(idCatTipoServicio?: number, tipoFront?: number): string {
+  switch (idCatTipoServicio) {
+    case 1:
+      return 'Recargas';
+    case 2:
+      return 'Servicios';
+    case 3:
+      return 'Telecomunicaciones y TV';
+    case 4:
+      return 'Agua y Gobierno';
+    case 10:
+    case 11:
+      return 'Pines y Entretenimiento';
+    default:
+      break;
+  }
+  switch (tipoFront) {
+    case 1:
+      return 'Recargas';
+    case 2:
+      return 'Servicios';
+    case 4:
+      return 'Pines y Entretenimiento';
+    default:
+      return 'Otros servicios';
+  }
+}
 
 /** Misma regla que el backend: RECARGA ⇒ tipoFront 1; SERVICIO ⇒ tipoFront 2 o idCatTipoServicio 10/11. */
 function kindOf(dto: ProductDto): Product['kind'] {
@@ -21,12 +61,38 @@ export const toProduct = (dto: ProductDto): Product => ({
   serviceName: dto.servicio,
   idServicio: dto.idServicio,
   idProducto: dto.idProducto,
+  idCatTipoServicio: dto.idCatTipoServicio,
+  tipoFront: dto.tipoFront,
   kind: kindOf(dto),
+  category: dto.categoria?.trim() || translateCategory(dto.idCatTipoServicio, dto.tipoFront),
+  description: dto.legend?.trim() || undefined,
+  logoUrl: dto.logoUrl?.trim() || undefined,
   price: parsePrice(dto.precio),
   referenceType: dto.tipoReferencia,
   hasCheckDigit: dto.hasDigitoVerificador ?? false,
   helpAvailable: dto.showAyuda ?? false,
 });
+
+export function toReferenceValidationResult(
+  dto: ValidateReferenceResponseDto,
+): ReferenceValidationResult {
+  return {
+    valid: Boolean(dto.valida),
+    status: dto.estadoValidacion,
+    validationId: dto.validationId,
+    idServicio: dto.idServicio,
+    idProducto: dto.idProducto,
+    reference: dto.referencia,
+    serviceName: dto.nombreServicio,
+    productName: dto.nombreProducto,
+    category: dto.categoria,
+    description: dto.descripcion,
+    holderName: dto.titular,
+    amountDue: dto.adeudo,
+    validatedAmount: dto.montoValidado,
+    message: dto.mensaje,
+  };
+}
 
 export function toPagoRequest(input: PaymentInput): PagoRequestDto {
   const base: PagoRequestDto = {
@@ -42,7 +108,7 @@ export function toPagoRequest(input: PaymentInput): PagoRequestDto {
 
 export function toReceipt(dto: PagoResponseDto, input: PaymentInput): PaymentReceipt {
   return {
-    applied: dto.codigo === 1 && dto.estado === 'APLICADO',
+    applied: dto.estado === 'APLICADO',
     status: dto.estado,
     message: dto.mensaje,
     authorization: dto.numAutorizacion,
@@ -53,8 +119,33 @@ export function toReceipt(dto: PagoResponseDto, input: PaymentInput): PaymentRec
     kind: input.kind,
     productName: input.product.name,
     serviceName: input.product.serviceName,
+    logoUrl: input.product.logoUrl,
     destination: input.kind === 'RECARGA' ? (input.phone ?? '') : (input.reference ?? ''),
     accountNumber: input.accountNumber,
     createdAt: new Date().toISOString(),
+  };
+}
+
+export function toReceiptFromDetail(dto: PagoDetalleDto, prev?: PaymentReceipt): PaymentReceipt {
+  return {
+    id: dto.id,
+    applied: dto.estado === 'APLICADO',
+    status: dto.estado,
+    message: dto.mensaje,
+    authorization: dto.numAutorizacion,
+    transactionId: dto.idTx,
+    upc: dto.upc,
+    gatewayCode: dto.codigoGestoPago,
+    amount: dto.monto ?? prev?.amount,
+    kind: dto.tipoPago,
+    productName: dto.nombreProducto || prev?.productName || '',
+    serviceName: dto.nombreServicio || prev?.serviceName || '',
+    logoUrl: dto.logoUrl ?? prev?.logoUrl,
+    destination:
+      dto.tipoPago === 'RECARGA'
+        ? (dto.telefono ?? dto.destinoEnmascarado ?? prev?.destination ?? '')
+        : (dto.referencia ?? dto.destinoEnmascarado ?? prev?.destination ?? ''),
+    accountNumber: dto.numCuenta || prev?.accountNumber || '',
+    createdAt: dto.fechaCreacion ?? dto.fechaEnvio ?? prev?.createdAt ?? new Date().toISOString(),
   };
 }

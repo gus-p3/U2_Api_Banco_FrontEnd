@@ -6,6 +6,8 @@ import type {
   AuthResponseDto,
   BiometricLoginRequestDto,
   BiometricRegisterRequestDto,
+  OperationConfirmRequestDto,
+  OperationConfirmResponseDto,
   RefreshTokenRequestDto,
 } from './dto';
 import { toAuthResult } from './mappers';
@@ -37,6 +39,19 @@ export function createAuthRepository(client: AxiosInstance): AuthRepository {
       const body: RefreshTokenRequestDto = { refreshToken };
       const { data } = await client.post<AuthResponseDto>('/v1/auth/refresh', body, { skipAuth: true });
       return toAuthResult(data);
+    },
+
+    async confirmOperation(params) {
+      const body: OperationConfirmRequestDto = {
+        password: params.password,
+        biometricType: params.biometricType,
+        biometricData: params.biometricData,
+      };
+      const { data } = await client.post<OperationConfirmResponseDto>(
+        '/v1/auth/confirmar-operacion',
+        body,
+      );
+      return data.confirmationToken;
     },
 
     async logout() {

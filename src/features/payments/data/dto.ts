@@ -10,6 +10,9 @@ export interface ProductDto {
   tipoReferencia?: string;
   precio?: string;
   showAyuda?: boolean;
+  legend?: string;
+  categoria?: string;
+  logoUrl?: string;
   createdAt?: string;
 }
 
@@ -32,4 +35,55 @@ export interface PagoResponseDto {
   numAutorizacion?: string;
   idTx?: number;
   upc?: string;
+}
+
+export interface ValidateReferenceRequestDto {
+  idServicio: number;
+  idProducto: number;
+  referencia: string;
+  monto?: number;
+}
+
+export interface ValidateReferenceResponseDto {
+  valida: boolean;
+  estadoValidacion: 'VALIDA' | 'INVALIDA';
+  validationId?: string;
+  idServicio: number;
+  idProducto: number;
+  referencia: string;
+  nombreServicio?: string;
+  nombreProducto?: string;
+  categoria?: string;
+  descripcion?: string;
+  titular?: string;
+  adeudo?: number;
+  montoValidado?: number;
+  mensaje: string;
+}
+
+export interface PagoDetalleDto {
+  id: number;
+  codigo: number;
+  mensaje: string;
+  estado: 'PENDIENTE' | 'APLICADO' | 'RECHAZADO' | 'POR_CONFIRMAR';
+  tipoPago: 'RECARGA' | 'SERVICIO';
+  numCuenta: string;
+  idServicio: number;
+  idProducto: number;
+  nombreServicio: string;
+  nombreProducto: string;
+  categoria?: string;
+  logoUrl?: string;
+  telefono?: string;
+  referencia?: string;
+  destinoEnmascarado?: string;
+  monto: number;
+  comision?: number;
+  codigoGestoPago?: string;
+  numAutorizacion?: string;
+  idTx?: number;
+  upc?: string;
+  fechaEnvio?: string;
+  fechaCreacion?: string;
+  fechaActualizacion?: string;
 }

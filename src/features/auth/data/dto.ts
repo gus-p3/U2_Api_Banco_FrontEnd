@@ -21,6 +21,17 @@ export interface RefreshTokenRequestDto {
   refreshToken: string;
 }
 
+export interface OperationConfirmRequestDto {
+  password?: string;
+  biometricType?: 'HUELLA' | 'FACIAL';
+  biometricData?: string;
+}
+
+export interface OperationConfirmResponseDto {
+  confirmationToken: string;
+  expiresInSeconds: number;
+}
+
 export interface AuthResponseDto {
   token: string;
   refreshToken: string;
