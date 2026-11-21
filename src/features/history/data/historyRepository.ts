@@ -2,6 +2,7 @@ import type { AxiosInstance } from 'axios';
 
 import { http } from '@/core/http/client';
 import type { PagoDetalleDto } from '@/features/payments/data/dto';
+import { buildGestoPagoLogoUrl } from '@/features/payments/data/mappers';
 
 import type {
   HistoryRepository,
@@ -30,7 +31,7 @@ export function toHistoryItem(dto: PagoDetalleDto): PaymentHistoryItem {
     serviceName: dto.nombreServicio,
     productName: dto.nombreProducto,
     category: dto.categoria,
-    logoUrl: dto.logoUrl,
+    logoUrl: dto.logoUrl?.trim() || buildGestoPagoLogoUrl(dto.idServicio),
     maskedDestination: masked,
     fullDestination: rawDest ?? masked,
     accountNumber: dto.numCuenta,

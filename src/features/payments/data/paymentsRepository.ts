@@ -21,8 +21,17 @@ import {
 export function createPaymentsRepository(client: AxiosInstance): PaymentsRepository {
   return {
     async getProducts() {
-      const { data } = await client.get<ProductDto[]>('/v1/productos/redis');
-      const source = Array.isArray(data) ? data : [];
+      let source: ProductDto[] = [];
+      try {
+        const { data } = await client.get<ProductDto[]>('/v1/productos/redis');
+        source = Array.isArray(data) ? data : [];
+      } catch {
+        source = [];
+      }
+      if (source.length === 0) {
+        const { data } = await client.get<ProductDto[]>('/v1/productos');
+        source = Array.isArray(data) ? data : [];
+      }
       return source.map(toProduct).filter((p) => p.kind !== 'OTRO');
     },
 

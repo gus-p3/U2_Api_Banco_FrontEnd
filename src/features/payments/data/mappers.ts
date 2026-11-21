@@ -18,6 +18,14 @@ const parsePrice = (precio: string | undefined): number | undefined => {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 };
 
+/** Construye la URL oficial del logotipo del servicio en GestoPago a partir de idServicio. */
+export function buildGestoPagoLogoUrl(idServicio?: number): string | undefined {
+  if (typeof idServicio !== 'number' || !Number.isFinite(idServicio) || idServicio <= 0) {
+    return undefined;
+  }
+  return `https://gestopago.portalventas.net/sistema/images/gestopago/servicios/${idServicio}.png`;
+}
+
 /** Traduce la categoría desde idCatTipoServicio y tipoFront cuando el backend no la envía ya traducida. */
 export function translateCategory(idCatTipoServicio?: number, tipoFront?: number): string {
   switch (idCatTipoServicio) {
@@ -66,7 +74,7 @@ export const toProduct = (dto: ProductDto): Product => ({
   kind: kindOf(dto),
   category: dto.categoria?.trim() || translateCategory(dto.idCatTipoServicio, dto.tipoFront),
   description: dto.legend?.trim() || undefined,
-  logoUrl: dto.logoUrl?.trim() || undefined,
+  logoUrl: dto.logoUrl?.trim() || buildGestoPagoLogoUrl(dto.idServicio),
   price: parsePrice(dto.precio),
   referenceType: dto.tipoReferencia,
   hasCheckDigit: dto.hasDigitoVerificador ?? false,
@@ -119,7 +127,7 @@ export function toReceipt(dto: PagoResponseDto, input: PaymentInput): PaymentRec
     kind: input.kind,
     productName: input.product.name,
     serviceName: input.product.serviceName,
-    logoUrl: input.product.logoUrl,
+    logoUrl: input.product.logoUrl ?? buildGestoPagoLogoUrl(input.product.idServicio),
     destination: input.kind === 'RECARGA' ? (input.phone ?? '') : (input.reference ?? ''),
     accountNumber: input.accountNumber,
     createdAt: new Date().toISOString(),
@@ -140,7 +148,7 @@ export function toReceiptFromDetail(dto: PagoDetalleDto, prev?: PaymentReceipt):
     kind: dto.tipoPago,
     productName: dto.nombreProducto || prev?.productName || '',
     serviceName: dto.nombreServicio || prev?.serviceName || '',
-    logoUrl: dto.logoUrl ?? prev?.logoUrl,
+    logoUrl: dto.logoUrl?.trim() || buildGestoPagoLogoUrl(dto.idServicio) || prev?.logoUrl,
     destination:
       dto.tipoPago === 'RECARGA'
         ? (dto.telefono ?? dto.destinoEnmascarado ?? prev?.destination ?? '')

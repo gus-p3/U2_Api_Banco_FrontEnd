@@ -353,6 +353,9 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
     expect(items).toHaveLength(1);
     expect(items[0]?.description).toBe('Ingresa los 10 dígitos de tu línea Telcel');
     expect(items[0]?.category).toBe('Recargas');
+    expect(items[0]?.logoUrl).toBe(
+      'https://gestopago.portalventas.net/sistema/images/gestopago/servicios/133.png',
+    );
   });
 
   it('Fase 4: validateReference distingue referencia válida, inválida y bloquea pago de servicio sin validar', async () => {
