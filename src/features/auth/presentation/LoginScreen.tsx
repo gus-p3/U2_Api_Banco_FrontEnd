@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -5,7 +6,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 
 import { toAppError } from '@/core/errors/toAppError';
-import { colors, radii, spacing, typography } from '@/shared/theme';
+import { colors, radii, shadows, spacing, typography } from '@/shared/theme';
 import { Button, Card, Input, Screen } from '@/shared/ui';
 
 import { authDeps } from '../di';
@@ -26,9 +27,12 @@ export function LoginScreen() {
     handleSubmit,
     setValue,
     getValues,
+    trigger,
     formState: { errors, isSubmitting },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
+    mode: 'onChange',
+    reValidateMode: 'onChange',
     defaultValues: { email: '', password: '' },
   });
 
@@ -40,7 +44,7 @@ export function LoginScreen() {
       ]);
       setBiometricAvailable(avail);
       if (lastEmail) {
-        setValue('email', lastEmail);
+        setValue('email', lastEmail, { shouldValidate: true });
         const secret = await authDeps.store.getBiometricSecret(lastEmail);
         if (secret) setBiometricEmail(lastEmail);
       }
@@ -57,15 +61,20 @@ export function LoginScreen() {
   };
 
   const onBiometricPress = async () => {
-    const email = (getValues('email') || biometricEmail || '').trim();
-    if (!email) {
-      setServerError('Ingresa tu correo electrónico para usar el acceso biométrico.');
+    const rawEmail = getValues('email') || biometricEmail || '';
+    if (!getValues('email') && biometricEmail) {
+      setValue('email', biometricEmail, { shouldValidate: true });
+    }
+    const validEmail = await trigger('email');
+    const parsed = loginSchema.shape.email.safeParse(rawEmail);
+    if (!validEmail || !parsed.success) {
+      setServerError('Ingresa un correo electrónico válido para usar el acceso con huella digital.');
       return;
     }
     setServerError(null);
     setBioLoading(true);
     try {
-      await signInWithBiometrics(email);
+      await signInWithBiometrics(parsed.data);
     } catch (e) {
       setServerError(toAppError(e).message);
     } finally {
@@ -82,10 +91,13 @@ export function LoginScreen() {
     <Screen>
       <View style={styles.brand}>
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>BD</Text>
+          <Ionicons name="sparkles" size={28} color={colors.textOnPrimary} />
+        </View>
+        <View style={styles.pillTag}>
+          <Text style={styles.pillTagText}>FINTECH DIGITAL</Text>
         </View>
         <Text style={styles.title}>Banco Digital</Text>
-        <Text style={styles.subtitle}>Banca segura y transparente</Text>
+        <Text style={styles.subtitle}>Tu dinero, pagos y recargas al instante</Text>
       </View>
 
       {endReason === 'inactivity' ? (
@@ -106,6 +118,7 @@ export function LoginScreen() {
               placeholder="nombre@correo.com"
               keyboardType="email-address"
               autoComplete="email"
+              maxLength={100}
               value={value}
               onBlur={onBlur}
               onChangeText={onChange}
@@ -123,6 +136,7 @@ export function LoginScreen() {
               placeholder="••••••••••••"
               secureTextEntry
               autoComplete="password"
+              maxLength={100}
               value={value}
               onBlur={onBlur}
               onChangeText={onChange}
@@ -171,22 +185,34 @@ const styles = StyleSheet.create({
   badge: {
     width: 64,
     height: 64,
-    borderRadius: radii.xl,
+    borderRadius: radii.lg,
     backgroundColor: colors.primary,
-    borderWidth: 2,
-    borderColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xs,
+    ...shadows.hero,
   },
-  badgeText: { ...typography.heading, color: colors.accent, letterSpacing: 1 },
-  title: { ...typography.title, color: colors.primary },
-  subtitle: { ...typography.body, color: colors.textMuted },
+  pillTag: {
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
+  },
+  pillTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 1,
+  },
+  title: { ...typography.title, color: colors.text },
+  subtitle: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
   formCard: { gap: spacing.lg },
   errorBox: {
     backgroundColor: colors.dangerBg,
     borderRadius: radii.md,
     padding: spacing.md,
+    borderWidth: 1,
+    borderColor: '#FECACA',
   },
   errorText: { ...typography.caption, color: colors.danger },
   bannerWarn: {

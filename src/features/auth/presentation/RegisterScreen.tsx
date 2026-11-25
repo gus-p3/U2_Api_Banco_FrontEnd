@@ -3,7 +3,6 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { z } from 'zod';
 
 import { toAppError } from '@/core/errors/toAppError';
 import { http } from '@/core/http/client';
@@ -18,48 +17,7 @@ import { colors, radii, spacing, typography } from '@/shared/theme';
 import { Button, Card, Input, Screen } from '@/shared/ui';
 
 import { signInWithPassword } from './authActions';
-
-const schema = z.object({
-  name: z.string().trim().min(2, 'Mínimo 2 caracteres'),
-  lastName: z.string().trim().min(2, 'Mínimo 2 caracteres'),
-  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD'),
-  curp: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(
-      /^[A-Z]{4}[0-9]{6}[HM][A-Z]{2}[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9][0-9]$/,
-      'CURP inválida (18 caracteres)',
-    ),
-  rfc: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$/, 'RFC inválido (12 o 13 caracteres)'),
-  idGender: z.number().positive('Selecciona un género'),
-  idNationality: z.number().positive('Selecciona nacionalidad'),
-  idMaritalStatus: z.number().positive('Selecciona estado civil'),
-  email: z.string().trim().email('Correo inválido'),
-  mobilePhone: z.string().regex(/^[0-9]{10}$/, '10 dígitos numéricos'),
-  street: z.string().trim().min(2, 'Calle obligatoria'),
-  exteriorNumber: z.string().trim().min(1, 'Número exterior obligatorio'),
-  neighborhood: z.string().trim().min(2, 'Colonia obligatoria'),
-  claveEntidad: z.string().regex(/^[0-9]{2}$/, 'Selecciona un estado'),
-  idMunicipality: z.number().positive('Selecciona un municipio'),
-  postalCode: z.string().regex(/^[0-9]{5}$/, '5 dígitos numéricos'),
-  occupation: z.string().trim().min(2, 'Ocupación obligatoria'),
-  company: z.string().trim().min(2, 'Empresa obligatoria'),
-  monthlyIncome: z.string().refine((v) => Number(v) > 0, 'Mayor a 0'),
-  password: z
-    .string()
-    .min(12, 'Mínimo 12 caracteres')
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&.#_-])[A-Za-z\d@$!%*?&.#_-]+$/,
-      'Incluye mayúscula, minúscula, número y especial',
-    ),
-});
-
-type FormValues = z.infer<typeof schema>;
+import { type RegisterFormValues, registerSchema } from './registerSchema';
 
 export function RegisterScreen() {
   const router = useRouter();
@@ -75,8 +33,10 @@ export function RegisterScreen() {
     watch,
     setValue,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+  } = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
+    mode: 'onChange',
+    reValidateMode: 'onChange',
     defaultValues: {
       name: '',
       lastName: '',
@@ -104,34 +64,34 @@ export function RegisterScreen() {
   const selectedState = watch('claveEntidad');
   const municipalities = useMunicipalities(selectedState);
 
-  const onSubmit = async (v: FormValues) => {
+  const onSubmit = async (v: RegisterFormValues) => {
     setServerError(null);
     try {
       const body = {
-        name: v.name,
-        lastName: v.lastName,
-        birthDate: v.birthDate,
-        curp: v.curp.toUpperCase(),
-        rfc: v.rfc.toUpperCase(),
+        name: v.name.trim(),
+        lastName: v.lastName.trim(),
+        birthDate: v.birthDate.trim(),
+        curp: v.curp.trim().toUpperCase(),
+        rfc: v.rfc.trim().toUpperCase(),
         idGender: v.idGender,
         idNationality: v.idNationality,
         idMaritalStatus: v.idMaritalStatus,
-        email: v.email,
-        mobilePhone: v.mobilePhone,
-        street: v.street,
-        exteriorNumber: v.exteriorNumber,
-        neighborhood: v.neighborhood,
+        email: v.email.trim(),
+        mobilePhone: v.mobilePhone.trim(),
+        street: v.street.trim(),
+        exteriorNumber: v.exteriorNumber.trim(),
+        neighborhood: v.neighborhood.trim(),
         idMunicipality: v.idMunicipality,
-        claveEntidad: v.claveEntidad,
-        postalCode: v.postalCode,
-        occupation: v.occupation,
-        company: v.company,
+        claveEntidad: v.claveEntidad.trim(),
+        postalCode: v.postalCode.trim(),
+        occupation: v.occupation.trim(),
+        company: v.company.trim(),
         monthlyIncome: Number(v.monthlyIncome),
         initialBalance: 1000,
         password: v.password,
       };
       await http.post('/v1/clientes', body, { skipAuth: true });
-      await signInWithPassword(v.email, v.password);
+      await signInWithPassword(v.email.trim(), v.password);
     } catch (e) {
       setServerError(toAppError(e).message);
     }
@@ -150,7 +110,10 @@ export function RegisterScreen() {
           render={({ field }) => (
             <Input
               label="Nombre(s)"
+              placeholder="Ej. Alejandro"
+              maxLength={50}
               value={field.value}
+              onBlur={field.onBlur}
               onChangeText={field.onChange}
               error={errors.name?.message}
             />
@@ -162,7 +125,10 @@ export function RegisterScreen() {
           render={({ field }) => (
             <Input
               label="Apellido paterno"
+              placeholder="Ej. Hernández"
+              maxLength={50}
               value={field.value}
+              onBlur={field.onBlur}
               onChangeText={field.onChange}
               error={errors.lastName?.message}
             />
@@ -173,8 +139,11 @@ export function RegisterScreen() {
           name="birthDate"
           render={({ field }) => (
             <Input
-              label="Fecha de nacimiento (YYYY-MM-DD)"
+              label="Fecha de nacimiento (AAAA-MM-DD)"
+              placeholder="1995-05-15"
+              maxLength={10}
               value={field.value}
+              onBlur={field.onBlur}
               onChangeText={field.onChange}
               error={errors.birthDate?.message}
             />
@@ -185,10 +154,13 @@ export function RegisterScreen() {
           name="curp"
           render={({ field }) => (
             <Input
-              label="CURP"
+              label="CURP (18 caracteres)"
+              placeholder="HERA950515HDFRND01"
               autoCapitalize="characters"
+              maxLength={18}
               value={field.value}
-              onChangeText={field.onChange}
+              onBlur={field.onBlur}
+              onChangeText={(txt) => field.onChange(txt.toUpperCase())}
               error={errors.curp?.message}
             />
           )}
@@ -198,10 +170,13 @@ export function RegisterScreen() {
           name="rfc"
           render={({ field }) => (
             <Input
-              label="RFC"
+              label="RFC (12 o 13 caracteres)"
+              placeholder="HERA950515ABC"
               autoCapitalize="characters"
+              maxLength={13}
               value={field.value}
-              onChangeText={field.onChange}
+              onBlur={field.onBlur}
+              onChangeText={(txt) => field.onChange(txt.toUpperCase())}
               error={errors.rfc?.message}
             />
           )}
@@ -224,6 +199,9 @@ export function RegisterScreen() {
                 );
               })}
             </View>
+            {errors.idGender?.message ? (
+              <Text style={styles.errorText}>{errors.idGender.message}</Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -244,6 +222,9 @@ export function RegisterScreen() {
                 );
               })}
             </View>
+            {errors.idNationality?.message ? (
+              <Text style={styles.errorText}>{errors.idNationality.message}</Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -264,6 +245,9 @@ export function RegisterScreen() {
                 );
               })}
             </View>
+            {errors.idMaritalStatus?.message ? (
+              <Text style={styles.errorText}>{errors.idMaritalStatus.message}</Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -274,8 +258,11 @@ export function RegisterScreen() {
           render={({ field }) => (
             <Input
               label="Correo electrónico"
+              placeholder="nombre@correo.com"
               keyboardType="email-address"
+              maxLength={100}
               value={field.value}
+              onBlur={field.onBlur}
               onChangeText={field.onChange}
               error={errors.email?.message}
             />
@@ -287,8 +274,11 @@ export function RegisterScreen() {
           render={({ field }) => (
             <Input
               label="Teléfono móvil (10 dígitos)"
-              keyboardType="phone-pad"
+              placeholder="5512345678"
+              keyboardType="number-pad"
+              maxLength={10}
               value={field.value}
+              onBlur={field.onBlur}
               onChangeText={field.onChange}
               error={errors.mobilePhone?.message}
             />
@@ -300,7 +290,10 @@ export function RegisterScreen() {
           render={({ field }) => (
             <Input
               label="Calle"
+              placeholder="Av. Paseo de la Reforma"
+              maxLength={100}
               value={field.value}
+              onBlur={field.onBlur}
               onChangeText={field.onChange}
               error={errors.street?.message}
             />
@@ -312,7 +305,10 @@ export function RegisterScreen() {
           render={({ field }) => (
             <Input
               label="Número exterior"
+              placeholder="222"
+              maxLength={10}
               value={field.value}
+              onBlur={field.onBlur}
               onChangeText={field.onChange}
               error={errors.exteriorNumber?.message}
             />
@@ -324,7 +320,10 @@ export function RegisterScreen() {
           render={({ field }) => (
             <Input
               label="Colonia"
+              placeholder="Juárez"
+              maxLength={80}
               value={field.value}
+              onBlur={field.onBlur}
               onChangeText={field.onChange}
               error={errors.neighborhood?.message}
             />
@@ -335,9 +334,12 @@ export function RegisterScreen() {
           name="postalCode"
           render={({ field }) => (
             <Input
-              label="Código postal"
+              label="Código postal (5 dígitos)"
+              placeholder="06600"
               keyboardType="number-pad"
+              maxLength={5}
               value={field.value}
+              onBlur={field.onBlur}
               onChangeText={field.onChange}
               error={errors.postalCode?.message}
             />
@@ -356,7 +358,7 @@ export function RegisterScreen() {
                     style={[styles.chip, active && styles.chipActive]}
                     onPress={() => {
                       setValue('claveEntidad', s.code, { shouldValidate: true });
-                      setValue('idMunicipality', 0);
+                      setValue('idMunicipality', 0, { shouldValidate: true });
                     }}
                   >
                     <Text style={[styles.chipText, active && styles.chipTextActive]}>{s.name}</Text>
@@ -364,6 +366,9 @@ export function RegisterScreen() {
                 );
               })}
             </View>
+            {errors.claveEntidad?.message ? (
+              <Text style={styles.errorText}>{errors.claveEntidad.message}</Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -397,7 +402,10 @@ export function RegisterScreen() {
           render={({ field }) => (
             <Input
               label="Ocupación"
+              placeholder="Ingeniero de Software"
+              maxLength={80}
               value={field.value}
+              onBlur={field.onBlur}
               onChangeText={field.onChange}
               error={errors.occupation?.message}
             />
@@ -409,7 +417,10 @@ export function RegisterScreen() {
           render={({ field }) => (
             <Input
               label="Empresa"
+              placeholder="Tecnología Financiera SA"
+              maxLength={100}
               value={field.value}
+              onBlur={field.onBlur}
               onChangeText={field.onChange}
               error={errors.company?.message}
             />
@@ -421,8 +432,11 @@ export function RegisterScreen() {
           render={({ field }) => (
             <Input
               label="Ingreso mensual (MXN)"
+              placeholder="25000.00"
               keyboardType="decimal-pad"
+              maxLength={13}
               value={field.value}
+              onBlur={field.onBlur}
               onChangeText={field.onChange}
               error={errors.monthlyIncome?.message}
             />
@@ -434,8 +448,11 @@ export function RegisterScreen() {
           render={({ field }) => (
             <Input
               label="Contraseña de acceso"
+              placeholder="Mín. 12 caracteres con mayúscula, número y especial"
               secureTextEntry
+              maxLength={100}
               value={field.value}
+              onBlur={field.onBlur}
               onChangeText={field.onChange}
               error={errors.password?.message}
             />
@@ -456,23 +473,28 @@ export function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { ...typography.title, color: colors.primary },
+  title: { ...typography.title, color: colors.text },
   subtitle: { ...typography.body, color: colors.textMuted },
   card: { gap: spacing.md },
-  section: { ...typography.subheading, color: colors.primary, marginTop: spacing.sm },
+  section: {
+    ...typography.subheading,
+    color: colors.primary,
+    fontWeight: '700',
+    marginTop: spacing.sm,
+  },
   chipsWrap: { gap: spacing.xs },
-  chipLabel: { ...typography.caption, color: colors.textMuted, fontWeight: '600' },
+  chipLabel: { ...typography.caption, color: colors.text, fontWeight: '600' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   chip: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingVertical: 7,
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surfaceMuted,
   },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { ...typography.caption, color: colors.text },
-  chipTextActive: { color: colors.textOnPrimary, fontWeight: '600' },
+  chipText: { ...typography.caption, color: colors.text, fontWeight: '600' },
+  chipTextActive: { color: colors.textOnPrimary, fontWeight: '700' },
   errorText: { ...typography.caption, color: colors.danger },
 });

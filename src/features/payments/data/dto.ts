@@ -12,7 +12,6 @@ export interface ProductDto {
   showAyuda?: boolean;
   legend?: string;
   categoria?: string;
-  logoUrl?: string;
   createdAt?: string;
 }
 
@@ -73,7 +72,6 @@ export interface PagoDetalleDto {
   nombreServicio: string;
   nombreProducto: string;
   categoria?: string;
-  logoUrl?: string;
   telefono?: string;
   referencia?: string;
   destinoEnmascarado?: string;

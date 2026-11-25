@@ -10,17 +10,30 @@ export interface CardProps {
 }
 
 function CardBase({ children, tone = 'default', style }: CardProps) {
-  return <View style={[styles.card, tone === 'primary' && styles.primary, style]}>{children}</View>;
+  return (
+    <View style={[styles.card, tone === 'primary' ? styles.primary : styles.defaultCard, style]}>
+      {children}
+    </View>
+  );
 }
 
 export const Card = memo(CardBase);
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
     borderRadius: radii.lg,
     padding: spacing.lg,
+  },
+  defaultCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     ...shadows.card,
   },
-  primary: { backgroundColor: colors.primary },
+  primary: {
+    backgroundColor: colors.primary,
+    borderWidth: 1,
+    borderColor: colors.primaryLight,
+    ...shadows.hero,
+  },
 });

@@ -28,7 +28,8 @@ export const errorMessages: Record<ApiErrorCode, string> = {
   ACCESS_DENIED: 'No tienes acceso a este recurso.',
   TOKEN_MISSING: 'Debes iniciar sesión para continuar.',
   SESSION_INACTIVE: 'Tu sesión terminó por inactividad. Inicia sesión nuevamente.',
-  STRONG_AUTH_REQUIRED: 'Para autorizar el pago confirma tu identidad con contraseña o huella digital.',
+  STRONG_AUTH_REQUIRED:
+    'Para autorizar el pago es obligatorio confirmar tu identidad con huella digital en la app móvil.',
   PAYMENT_FORBIDDEN: 'No es posible operar con la cuenta indicada.',
   BAD_REQUEST: 'La solicitud no es válida. Revisa los datos capturados.',
   INVALID_PARAM: 'Alguno de los datos enviados no es válido.',
@@ -39,10 +40,11 @@ export const errorMessages: Record<ApiErrorCode, string> = {
   NETWORK_ERROR: 'No hay conexión con el servidor. Revisa tu red e inténtalo de nuevo.',
   TIMEOUT: 'El servidor tardó demasiado en responder. Inténtalo de nuevo.',
   UNKNOWN: 'Ocurrió un error inesperado. Inténtalo de nuevo.',
-  BIOMETRIC_UNAVAILABLE: 'Este dispositivo no tiene biometría disponible.',
-  BIOMETRIC_CANCELLED: 'Cancelaste la verificación biométrica.',
+  BIOMETRIC_UNAVAILABLE: 'Este dispositivo no tiene biometría de huella disponible.',
+  BIOMETRIC_CANCELLED: 'Cancelaste la verificación de huella digital.',
   BIOMETRIC_NOT_ENROLLED: 'Aún no activas la huella en este dispositivo. Actívala en Perfil.',
-  UNSUPPORTED_PLATFORM: 'Esta función solo está disponible en la app Android.',
+  UNSUPPORTED_PLATFORM:
+    'Los pagos están deshabilitados en la versión web; usa la app móvil con tu huella digital.',
 };
 
 const knownCodes = new Set<string>(Object.keys(errorMessages));

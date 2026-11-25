@@ -1,9 +1,11 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { toAppError } from '@/core/errors/toAppError';
 import { formatCurrency } from '@/core/utils/format';
+import { validateSearchQuery } from '@/core/validation/validators';
 import { colors, radii, spacing, typography } from '@/shared/theme';
 import {
   Button,
@@ -17,18 +19,20 @@ import {
 } from '@/shared/ui';
 
 import type { Product } from '../domain/entities';
-import { useProducts } from './hooks';
+import { isPaymentsSupported, useProducts } from './hooks';
 
 const PAGE_SIZE = 20;
 
 export function CatalogScreen() {
   const router = useRouter();
   const productsQuery = useProducts();
+  const paymentsAllowed = isPaymentsSupported();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
+  const searchError = validateSearchQuery(search, 60);
   const products = useMemo(() => productsQuery.data ?? [], [productsQuery.data]);
 
   const categories = useMemo(() => {
@@ -44,6 +48,7 @@ export function CatalogScreen() {
       selectedCategory === 'Todas'
         ? products
         : products.filter((p) => (p.category ?? 'Otros servicios') === selectedCategory);
+    if (searchError) return byCat;
     const q = search.trim().toLowerCase();
     if (!q) return byCat;
     return byCat.filter(
@@ -55,7 +60,7 @@ export function CatalogScreen() {
         String(p.idServicio).includes(q) ||
         String(p.idProducto).includes(q),
     );
-  }, [products, selectedCategory, search]);
+  }, [products, selectedCategory, search, searchError]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -65,6 +70,7 @@ export function CatalogScreen() {
   }, [filteredProducts, safePage]);
 
   const handleSelectProduct = (product: Product) => {
+    if (!paymentsAllowed) return;
     router.push({
       pathname: '/(tabs)/payments',
       params: {
@@ -82,15 +88,27 @@ export function CatalogScreen() {
         Consulta todos los proveedores y productos sincronizados desde GestoPago.
       </Text>
 
+      {!paymentsAllowed ? (
+        <View style={styles.webNotice}>
+          <Ionicons name="finger-print" size={18} color={colors.primary} />
+          <Text style={styles.webNoticeText}>
+            Modo consulta en Web: para pagar o recargar abre la app móvil y autoriza con tu huella
+            digital.
+          </Text>
+        </View>
+      ) : null}
+
       <Card style={styles.filterCard}>
         <Input
           label="Buscar por servicio, producto, descripción o ID"
           placeholder="Ej. Telcel, CFE, agua, 133, 582..."
+          maxLength={60}
           value={search}
           onChangeText={(val) => {
             setSearch(val);
             setPage(1);
           }}
+          error={searchError}
         />
 
         <View style={styles.categoryChips}>
@@ -178,11 +196,20 @@ export function CatalogScreen() {
                 ) : null}
               </View>
 
-              <Button
-                title={p.kind === 'RECARGA' ? 'Recargar este producto' : 'Pagar este servicio'}
-                variant="secondary"
-                onPress={() => handleSelectProduct(p)}
-              />
+              {paymentsAllowed ? (
+                <Button
+                  title={p.kind === 'RECARGA' ? 'Recargar este producto' : 'Pagar este servicio'}
+                  variant="secondary"
+                  onPress={() => handleSelectProduct(p)}
+                />
+              ) : (
+                <View style={styles.mobileOnlyTag}>
+                  <Ionicons name="phone-portrait-outline" size={14} color={colors.textMuted} />
+                  <Text style={styles.mobileOnlyTagText}>
+                    Pago exclusivo en app móvil con huella digital
+                  </Text>
+                </View>
+              )}
             </Card>
           ))}
 
@@ -212,47 +239,74 @@ export function CatalogScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { ...typography.title, color: colors.primary },
+  title: { ...typography.title, color: colors.text },
   subtitle: { ...typography.body, color: colors.textMuted },
+  webNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  webNoticeText: { ...typography.caption, color: colors.primary, fontWeight: '600', flex: 1 },
   filterCard: { gap: spacing.md },
   categoryChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   chip: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingVertical: 7,
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceMuted,
   },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { ...typography.caption, color: colors.text },
-  chipTextActive: { color: colors.textOnPrimary, fontWeight: '600' },
+  chipText: { ...typography.caption, color: colors.text, fontWeight: '600' },
+  chipTextActive: { color: colors.textOnPrimary, fontWeight: '700' },
   listContainer: { gap: spacing.md },
-  counterText: { ...typography.caption, color: colors.textMuted },
+  counterText: { ...typography.caption, color: colors.textMuted, fontWeight: '600' },
   productCard: { gap: spacing.sm },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   headerTexts: { flex: 1, gap: 2 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' },
-  serviceName: { ...typography.caption, color: colors.textMuted, fontWeight: '700' },
+  serviceName: { ...typography.caption, color: colors.primary, fontWeight: '700' },
   categoryBadge: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.primarySoft,
     borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
-  categoryBadgeText: { ...typography.caption, fontSize: 11, color: colors.primary },
-  productName: { ...typography.subheading, color: colors.text },
-  priceText: { ...typography.subheading, color: colors.primary, fontWeight: '700' },
-  descriptionText: { ...typography.body, color: colors.text },
+  categoryBadgeText: {
+    ...typography.caption,
+    fontSize: 11,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  productName: { ...typography.subheading, color: colors.text, fontWeight: '700' },
+  priceText: { ...typography.subheading, color: colors.primary, fontWeight: '800' },
+  descriptionText: { ...typography.caption, color: colors.textMuted, lineHeight: 19 },
   metaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: spacing.xs,
   },
-  metaText: { ...typography.caption, color: colors.textMuted },
+  metaText: { ...typography.caption, fontSize: 12, color: colors.textMuted },
+  mobileOnlyTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  mobileOnlyTagText: { ...typography.caption, color: colors.textMuted, fontWeight: '600' },
   paginationRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -260,6 +314,5 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.xs,
   },
-  pageIndicator: { ...typography.caption, color: colors.text, fontWeight: '600' },
+  pageIndicator: { ...typography.caption, color: colors.text, fontWeight: '700' },
 });
-

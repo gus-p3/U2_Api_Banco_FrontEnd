@@ -135,24 +135,22 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  title: { ...typography.title, color: colors.primary },
+  title: { ...typography.title, color: colors.text },
   headerCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
   avatar: {
     width: 60,
     height: 60,
-    borderRadius: radii.pill,
+    borderRadius: radii.lg,
     backgroundColor: colors.primary,
-    borderWidth: 2,
-    borderColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { ...typography.heading, color: colors.accent },
+  avatarText: { ...typography.heading, color: colors.textOnPrimary },
   headerInfo: { flex: 1, gap: 2 },
-  name: { ...typography.subheading, color: colors.primary },
+  name: { ...typography.subheading, color: colors.text, fontWeight: '700' },
   meta: { ...typography.caption, color: colors.textMuted },
   card: { gap: spacing.sm },
-  section: { ...typography.subheading, color: colors.primary, marginBottom: spacing.xs },
+  section: { ...typography.subheading, color: colors.text, fontWeight: '700', marginBottom: spacing.xs },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
   rowLabel: { ...typography.caption, color: colors.textMuted },
   rowValue: {

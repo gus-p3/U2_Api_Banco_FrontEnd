@@ -1,18 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { Platform } from 'react-native';
 
 import { colors } from '@/shared/theme';
 
 export default function TabsLayout() {
+  const isWeb = Platform.OS === 'web';
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          marginBottom: isWeb ? 4 : 2,
+        },
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
+          borderTopWidth: 1,
+          height: isWeb ? 64 : 60,
+          paddingTop: 6,
         },
       }}
     >
@@ -20,8 +31,8 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Inicio',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={String(color)} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={String(color)} />
           ),
         }}
       />
@@ -29,8 +40,12 @@ export default function TabsLayout() {
         name="accounts"
         options={{
           title: 'Cuentas',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="wallet-outline" size={size} color={String(color)} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? 'wallet' : 'wallet-outline'}
+              size={size}
+              color={String(color)}
+            />
           ),
         }}
       />
@@ -38,8 +53,8 @@ export default function TabsLayout() {
         name="catalog"
         options={{
           title: 'Catálogo',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="grid-outline" size={size} color={String(color)} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'grid' : 'grid-outline'} size={size} color={String(color)} />
           ),
         }}
       />
@@ -47,8 +62,13 @@ export default function TabsLayout() {
         name="payments"
         options={{
           title: 'Pagos',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="flash-outline" size={size} color={String(color)} />
+          href: isWeb ? null : undefined,
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? 'flash' : 'flash-outline'}
+              size={size}
+              color={String(color)}
+            />
           ),
         }}
       />
@@ -56,8 +76,8 @@ export default function TabsLayout() {
         name="history"
         options={{
           title: 'Historial',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="time-outline" size={size} color={String(color)} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'time' : 'time-outline'} size={size} color={String(color)} />
           ),
         }}
       />
@@ -65,8 +85,12 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Perfil',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={String(color)} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? 'person' : 'person-outline'}
+              size={size}
+              color={String(color)}
+            />
           ),
         }}
       />

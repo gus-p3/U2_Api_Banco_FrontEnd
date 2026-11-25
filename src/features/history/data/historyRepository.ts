@@ -31,7 +31,7 @@ export function toHistoryItem(dto: PagoDetalleDto): PaymentHistoryItem {
     serviceName: dto.nombreServicio,
     productName: dto.nombreProducto,
     category: dto.categoria,
-    logoUrl: dto.logoUrl?.trim() || buildGestoPagoLogoUrl(dto.idServicio),
+    logoUrl: buildGestoPagoLogoUrl(dto.idServicio),
     maskedDestination: masked,
     fullDestination: rawDest ?? masked,
     accountNumber: dto.numCuenta,

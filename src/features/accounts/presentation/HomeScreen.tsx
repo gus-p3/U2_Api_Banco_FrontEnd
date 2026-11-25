@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { toAppError } from '@/core/errors/toAppError';
 import { formatCurrency, formatDateTime, maskAccount } from '@/core/utils/format';
@@ -11,6 +11,7 @@ import { useAccounts, useRecentMovements } from './hooks';
 
 export function HomeScreen() {
   const router = useRouter();
+  const isWeb = Platform.OS === 'web';
   const {
     data: customer,
     accounts,
@@ -52,27 +53,62 @@ export function HomeScreen() {
         <Text style={styles.sub}>Bienvenido a tu banca digital</Text>
       </View>
 
+      {isWeb ? (
+        <View style={styles.webSecurityBanner}>
+          <Ionicons name="finger-print" size={18} color={colors.primary} />
+          <Text style={styles.webSecurityText}>
+            Banca Web de consulta: los pagos y recargas están habilitados únicamente en la app móvil
+            con huella digital.
+          </Text>
+        </View>
+      ) : null}
+
       <Card tone="primary" style={styles.balanceCard}>
-        <Text style={styles.balanceLabel}>Saldo total disponible</Text>
+        <View style={styles.heroTopRow}>
+          <Text style={styles.balanceLabel}>Saldo disponible</Text>
+          <View style={styles.heroChip}>
+            <Ionicons name="sparkles" size={13} color={colors.textOnPrimary} />
+            <Text style={styles.heroChipText}>ACTIVA</Text>
+          </View>
+        </View>
         <Text style={styles.balanceValue}>{formatCurrency(total)}</Text>
         {primary ? (
-          <Text style={styles.accountBadge}>
-            Cuenta principal {maskAccount(primary.number)} · {primary.status}
-          </Text>
+          <View style={styles.accountBadgeWrap}>
+            <Text style={styles.accountBadge}>
+              Cuenta principal {maskAccount(primary.number)} · {primary.status}
+            </Text>
+          </View>
         ) : null}
       </Card>
 
       <View style={styles.quickRow}>
-        <QuickAction
-          icon="phone-portrait-outline"
-          label="Recargas"
-          onPress={() => router.push('/(tabs)/payments?tab=RECARGA')}
-        />
-        <QuickAction
-          icon="receipt-outline"
-          label="Servicios"
-          onPress={() => router.push('/(tabs)/payments?tab=SERVICIO')}
-        />
+        {isWeb ? (
+          <>
+            <QuickAction
+              icon="grid-outline"
+              label="Catálogo"
+              onPress={() => router.push('/(tabs)/catalog')}
+            />
+            <QuickAction
+              icon="time-outline"
+              label="Historial"
+              onPress={() => router.push('/(tabs)/history')}
+            />
+          </>
+        ) : (
+          <>
+            <QuickAction
+              icon="phone-portrait-outline"
+              label="Recargas"
+              onPress={() => router.push('/(tabs)/payments?tab=RECARGA')}
+            />
+            <QuickAction
+              icon="receipt-outline"
+              label="Servicios"
+              onPress={() => router.push('/(tabs)/payments?tab=SERVICIO')}
+            />
+          </>
+        )}
         <QuickAction
           icon="wallet-outline"
           label="Cuentas"
@@ -158,7 +194,7 @@ function QuickAction({
       onPress={onPress}
     >
       <View style={styles.quickIcon}>
-        <Ionicons name={icon} size={22} color={colors.accent} />
+        <Ionicons name={icon} size={22} color={colors.primary} />
       </View>
       <Text style={styles.quickLabel}>{label}</Text>
     </Pressable>
@@ -167,39 +203,75 @@ function QuickAction({
 
 const styles = StyleSheet.create({
   greeting: { gap: 2 },
-  hello: { ...typography.heading, color: colors.primary },
-  sub: { ...typography.caption, color: colors.textMuted },
-  balanceCard: { gap: spacing.xs, paddingVertical: spacing.xl },
+  hello: { ...typography.title, color: colors.text },
+  sub: { ...typography.body, color: colors.textMuted },
+  webSecurityBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  webSecurityText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+    flex: 1,
+  },
+  balanceCard: { gap: spacing.sm, paddingVertical: spacing.xl },
+  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  heroChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radii.pill,
+  },
+  heroChipText: { fontSize: 11, fontWeight: '700', color: colors.textOnPrimary, letterSpacing: 0.6 },
   balanceLabel: {
     ...typography.caption,
-    color: colors.accentLight,
+    color: 'rgba(255, 255, 255, 0.85)',
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: 0.9,
+    fontWeight: '700',
   },
   balanceValue: { ...typography.amount, color: colors.textOnPrimary },
-  accountBadge: { ...typography.caption, color: colors.accentLight, marginTop: spacing.xs },
+  accountBadgeWrap: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 5,
+    borderRadius: radii.pill,
+    marginTop: spacing.xs,
+  },
+  accountBadge: { ...typography.caption, color: colors.textOnPrimary, fontWeight: '600' },
   quickRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
   quickItem: {
     flex: 1,
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: radii.md,
+    borderRadius: radii.lg,
     paddingVertical: spacing.md,
     gap: spacing.xs,
     borderWidth: 1,
     borderColor: colors.border,
   },
   quickIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.pill,
-    backgroundColor: colors.primary,
+    width: 44,
+    height: 44,
+    borderRadius: radii.md,
+    backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  quickLabel: { ...typography.caption, color: colors.primary, fontWeight: '600' },
+  quickLabel: { ...typography.caption, color: colors.text, fontWeight: '600' },
   sectionCard: { gap: spacing.xs },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionTitle: { ...typography.subheading, color: colors.primary },
-  link: { ...typography.caption, color: colors.primaryLight, fontWeight: '600' },
+  sectionTitle: { ...typography.subheading, color: colors.text, fontWeight: '700' },
+  link: { ...typography.caption, color: colors.primary, fontWeight: '700' },
 });

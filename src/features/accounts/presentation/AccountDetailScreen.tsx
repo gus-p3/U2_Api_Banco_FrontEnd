@@ -66,11 +66,11 @@ export function AccountDetailScreen() {
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  title: { ...typography.heading, color: colors.primary },
-  hero: { gap: spacing.xs },
-  number: { ...typography.caption, color: colors.accentLight },
+  title: { ...typography.heading, color: colors.text },
+  hero: { gap: spacing.xs, paddingVertical: spacing.xl },
+  number: { ...typography.caption, color: 'rgba(255, 255, 255, 0.85)', fontWeight: '600' },
   balance: { ...typography.amount, color: colors.textOnPrimary },
-  meta: { ...typography.caption, color: colors.accentLight },
+  meta: { ...typography.caption, color: 'rgba(255, 255, 255, 0.9)', fontWeight: '600' },
   movCard: { gap: spacing.xs },
-  sectionTitle: { ...typography.subheading, color: colors.primary },
+  sectionTitle: { ...typography.subheading, color: colors.text, fontWeight: '700' },
 });

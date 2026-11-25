@@ -121,7 +121,9 @@ export function ReceiptScreen() {
           <View style={styles.rejectedAlert} accessibilityRole="alert">
             <Text style={styles.rejectedAlertTitle}>Transacción no aplicada</Text>
             <Text style={styles.rejectedAlertText}>
-              El pago fue rechazado por el proveedor y el importe fue devuelto a tu cuenta.
+              {receipt.gatewayCode === '05'
+                ? 'No se puede procesar el pago por el momento, intente más tarde. El importe fue devuelto íntegramente a tu cuenta.'
+                : 'El pago fue rechazado por el proveedor y el importe fue devuelto a tu cuenta.'}
             </Text>
           </View>
         ) : null}
@@ -145,6 +147,9 @@ export function ReceiptScreen() {
           value={receipt.destination}
         />
         <Row label="Cuenta de cargo" value={maskAccount(receipt.accountNumber)} />
+        {receipt.gatewayCode ? (
+          <Row label="Código respuesta GestoPago" value={receipt.gatewayCode} />
+        ) : null}
         {receipt.authorization ? (
           <Row label="Folio de autorización" value={receipt.authorization} />
         ) : null}
@@ -209,7 +214,7 @@ const styles = StyleSheet.create({
     ...typography.caption,
     fontWeight: '700',
   },
-  status: { ...typography.subheading, color: colors.primary, textAlign: 'center' },
+  status: { ...typography.heading, color: colors.text, textAlign: 'center' },
   amount: { ...typography.amount, color: colors.primary },
   message: { ...typography.caption, color: colors.textMuted, textAlign: 'center' },
   pendingAlert: {

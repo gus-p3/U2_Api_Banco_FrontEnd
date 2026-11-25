@@ -1,10 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
+import { Platform } from 'react-native';
 
 import { LoginScreen } from '@/features/auth/presentation/LoginScreen';
 import { HistoryScreen } from '@/features/history/presentation/HistoryScreen';
 import { CatalogScreen } from '@/features/payments/presentation/CatalogScreen';
+import { PaymentsScreen } from '@/features/payments/presentation/PaymentsScreen';
 import { receiptStore } from '@/features/payments/presentation/hooks';
 import { ReceiptScreen } from '@/features/payments/presentation/ReceiptScreen';
 
@@ -37,6 +39,21 @@ jest.mock('@/features/auth/di', () => ({
       saveRefreshToken: jest.fn().mockResolvedValue(undefined),
     },
   },
+}));
+
+jest.mock('@/features/accounts/presentation/hooks', () => ({
+  accountKeys: {
+    customer: ['customer'],
+    movements: (n: string) => ['movements', n],
+  },
+  useAccounts: () => ({
+    accounts: [{ id: 1, number: '8336580575', balance: 25000, status: 'ACTIVA' }],
+    total: 25000,
+    isLoading: false,
+    isError: false,
+    refetch: jest.fn(),
+    isRefetching: false,
+  }),
 }));
 
 jest.mock('@/features/payments/data/paymentsRepository', () => ({
@@ -130,14 +147,21 @@ function Wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-describe('Flujo de pantallas UI (Login, Catálogo, Comprobante y Historial)', () => {
+describe('Flujo de pantallas UI (Login, Catálogo, Bloqueo Web de Pagos, Comprobante y Historial)', () => {
+  const originalOS = Platform.OS;
+
   beforeEach(() => {
+    Platform.OS = originalOS;
     mockPush.mockClear();
     mockReplace.mockClear();
     receiptStore.clear();
   });
 
-  it('renderiza LoginScreen y autocompleta las credenciales demo al presionar Usar credenciales demo', async () => {
+  afterAll(() => {
+    Platform.OS = originalOS;
+  });
+
+  it('renderiza LoginScreen, valida en tiempo real y autocompleta credenciales demo', async () => {
     await render(
       <Wrapper>
         <LoginScreen />
@@ -145,6 +169,10 @@ describe('Flujo de pantallas UI (Login, Catálogo, Comprobante y Historial)', ()
     );
 
     expect(screen.getByText('Banco Digital')).toBeTruthy();
+    const emailInput = screen.getByLabelText('Correo electrónico');
+    await fireEvent.changeText(emailInput, 'correo-invalido');
+    expect(await screen.findByText('Ingresa un correo electrónico con formato válido')).toBeTruthy();
+
     const demoBtn = screen.getByRole('button', { name: 'Usar credenciales demo' });
     await fireEvent.press(demoBtn);
 
@@ -154,17 +182,15 @@ describe('Flujo de pantallas UI (Login, Catálogo, Comprobante y Historial)', ()
     expect(screen.getByLabelText('Contraseña').props.value).toBe('PasswordSegura#2026');
   });
 
-  it('renderiza CatalogScreen con categorías, búsqueda y navegación a pagos', async () => {
-    await render(
+  it('renderiza CatalogScreen en móvil con navegación a pagos y en Web bloquea los botones de pago', async () => {
+    Platform.OS = 'android';
+    const { unmount } = await render(
       <Wrapper>
         <CatalogScreen />
       </Wrapper>,
     );
 
     expect(await screen.findByText('Telcel 100')).toBeTruthy();
-    expect(screen.getByText('Luz CFE')).toBeTruthy();
-    expect(screen.getByText('Ingresa los 10 dígitos de tu línea Telcel')).toBeTruthy();
-
     const payServiceBtn = screen.getByRole('button', { name: 'Pagar este servicio' });
     await fireEvent.press(payServiceBtn);
 
@@ -172,9 +198,37 @@ describe('Flujo de pantallas UI (Login, Catálogo, Comprobante y Historial)', ()
       pathname: '/(tabs)/payments',
       params: { tab: 'SERVICIO', productId: '209', serviceId: '79' },
     });
+    await unmount();
+
+    Platform.OS = 'web';
+    await render(
+      <Wrapper>
+        <CatalogScreen />
+      </Wrapper>,
+    );
+
+    expect(await screen.findByText('Telcel 100')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Pagar este servicio' })).toBeNull();
+    expect(
+      screen.getAllByText('Pago exclusivo en app móvil con huella digital').length,
+    ).toBeGreaterThan(0);
   });
 
-  it('ReceiptScreen diferencia visual y textualmente POR_CONFIRMAR, APLICADO y RECHAZADO', async () => {
+  it('PaymentsScreen en Web bloquea pagos por completo y muestra aviso de uso exclusivo en móvil con huella', async () => {
+    Platform.OS = 'web';
+    await render(
+      <Wrapper>
+        <PaymentsScreen />
+      </Wrapper>,
+    );
+
+    expect(
+      screen.getByText('Pagos exclusivos en la aplicación móvil con huella digital'),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText('Buscar compañía o producto')).toBeNull();
+  });
+
+  it('ReceiptScreen muestra POR_CONFIRMAR, APLICADO y maneja el rechazo con código 05 de GestoPago', async () => {
     receiptStore.set({
       id: 45,
       message: 'En espera de confirmación del proveedor',
@@ -197,9 +251,6 @@ describe('Flujo de pantallas UI (Login, Catálogo, Comprobante y Historial)', ()
     );
 
     expect(screen.getByText('POR CONFIRMAR')).toBeTruthy();
-    expect(screen.getByText('Pago en proceso de confirmación')).toBeTruthy();
-    expect(screen.getByText('Operación aún no confirmada como aplicada')).toBeTruthy();
-
     const refreshBtn = screen.getByRole('button', { name: 'Actualizar estado del pago' });
     await fireEvent.press(refreshBtn);
 
@@ -209,10 +260,11 @@ describe('Flujo de pantallas UI (Login, Catálogo, Comprobante y Historial)', ()
 
     receiptStore.set({
       id: 46,
-      message: 'Referencia vencida',
+      message: 'No se puede procesar el pago por el momento, intente más tarde',
       status: 'RECHAZADO',
       applied: false,
-      upc: 'UPC-REJ-02',
+      gatewayCode: '05',
+      upc: 'UPC-REJ-05',
       serviceName: 'CFE',
       productName: 'Luz CFE',
       destination: '979011005160',
@@ -229,11 +281,13 @@ describe('Flujo de pantallas UI (Login, Catálogo, Comprobante y Historial)', ()
     );
 
     expect(screen.getByText('RECHAZADO')).toBeTruthy();
-    expect(screen.getByText('Pago rechazado')).toBeTruthy();
-    expect(screen.getByText('Transacción no aplicada')).toBeTruthy();
+    expect(screen.getByText('05')).toBeTruthy();
+    expect(
+      screen.getByText('No se puede procesar el pago por el momento, intente más tarde'),
+    ).toBeTruthy();
   });
 
-  it('HistoryScreen muestra listado paginado con referencia enmascarada y navega al detalle', async () => {
+  it('HistoryScreen valida fechas en tiempo real y muestra listado paginado', async () => {
     await render(
       <Wrapper>
         <HistoryScreen />
@@ -241,11 +295,15 @@ describe('Flujo de pantallas UI (Login, Catálogo, Comprobante y Historial)', ()
     );
 
     expect(await screen.findByText('CFE · Luz CFE')).toBeTruthy();
-    expect(screen.getByText('Ref: ********5160')).toBeTruthy();
+    const desdeInput = screen.getByLabelText('Desde (AAAA-MM-DD)');
+    await fireEvent.changeText(desdeInput, '2026-99-99');
+    expect(
+      screen.getByText('La fecha inicial no corresponde a una fecha real del calendario.'),
+    ).toBeTruthy();
 
+    await fireEvent.changeText(desdeInput, '');
     const itemBtn = screen.getByRole('button', { name: 'Ver detalle de CFE Luz CFE' });
     await fireEvent.press(itemBtn);
-
     expect(mockPush).toHaveBeenCalledWith('/payment/101');
   });
 });

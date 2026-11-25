@@ -1,9 +1,16 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { toAppError } from '@/core/errors/toAppError';
 import { formatCurrency, maskAccount } from '@/core/utils/format';
+import {
+  validatePaymentAmount,
+  validatePhone10,
+  validateSearchQuery,
+  validateServiceReference,
+} from '@/core/validation/validators';
 import { useAccounts } from '@/features/accounts/presentation/hooks';
 import { isBiometricConfirmationAvailable } from '@/features/auth/presentation/authActions';
 import { colors, radii, spacing, typography } from '@/shared/theme';
@@ -21,39 +28,43 @@ import {
 } from '@/shared/ui';
 
 import type { PaymentKind, Product, ReferenceValidationResult } from '../domain/entities';
-import { receiptStore, usePay, useProducts, useValidateReference } from './hooks';
+import { isPaymentsSupported, receiptStore, usePay, useProducts, useValidateReference } from './hooks';
 
 const PAGE_STEP = 20;
 
 export function PaymentsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string; productId?: string; serviceId?: string }>();
+  const paymentsAllowed = isPaymentsSupported();
+
   const [kind, setKind] = useState<PaymentKind>('RECARGA');
   const [search, setSearch] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_STEP);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<string>('');
   const [phone, setPhone] = useState('');
+  const [phoneTouched, setPhoneTouched] = useState(false);
   const [reference, setReference] = useState('');
+  const [referenceTouched, setReferenceTouched] = useState(false);
   const [amount, setAmount] = useState('');
+  const [amountTouched, setAmountTouched] = useState(false);
   const [referenceValidation, setReferenceValidation] =
     useState<ReferenceValidationResult | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const productsQuery = useProducts();
+  const productsQuery = useProducts(paymentsAllowed);
   const { accounts } = useAccounts();
   const validateRefMutation = useValidateReference();
   const payMutation = usePay();
 
   useEffect(() => {
-    if (Platform.OS !== 'web') {
+    if (paymentsAllowed) {
       void isBiometricConfirmationAvailable().then(setBiometricAvailable);
     }
-  }, []);
+  }, [paymentsAllowed]);
 
   useEffect(() => {
     if (params.tab === 'SERVICIO' || params.tab === 'RECARGA') {
@@ -77,46 +88,141 @@ export function PaymentsScreen() {
       }
       setSelectedProduct(match);
       setReferenceValidation(null);
+      if (match.kind === 'SERVICIO' && match.price && match.price > 0) {
+        setAmount(String(match.price));
+      }
     }
   }, [params.productId, params.serviceId, productsQuery.data]);
 
   useEffect(() => {
     if (!selectedAccount && accounts[0]) {
-      setSelectedAccount(accounts[0].number);
+      const firstActive = accounts.find((a) => a.status === 'ACTIVA') ?? accounts[0];
+      setSelectedAccount(firstActive.number);
     }
   }, [accounts, selectedAccount]);
 
+  const selectedAccountObj = useMemo(
+    () => accounts.find((a) => a.number === selectedAccount),
+    [accounts, selectedAccount],
+  );
+
+  // Validaciones en tiempo real de todos los campos
+  const searchError = validateSearchQuery(search, 60);
+
+  const effectiveAmount =
+    kind === 'RECARGA' ? (selectedProduct?.price ?? 0) : Number(amount) || 0;
+
+  const accountError = useMemo(() => {
+    if (!selectedAccount) return 'Selecciona una cuenta de cargo.';
+    if (!/^[0-9]{10}$/.test(selectedAccount)) return 'El número de cuenta no es válido.';
+    if (selectedAccountObj && selectedAccountObj.status !== 'ACTIVA') {
+      return 'La cuenta seleccionada se encuentra inactiva para realizar pagos.';
+    }
+    if (
+      selectedAccountObj &&
+      effectiveAmount > 0 &&
+      selectedAccountObj.balance < effectiveAmount
+    ) {
+      return `Saldo insuficiente en la cuenta (${formatCurrency(selectedAccountObj.balance)} disponible).`;
+    }
+    return undefined;
+  }, [selectedAccount, selectedAccountObj, effectiveAmount]);
+
+  const phoneError = useMemo(() => {
+    if (kind !== 'RECARGA') return undefined;
+    return validatePhone10(phone);
+  }, [kind, phone]);
+
+  const referenceError = useMemo(() => {
+    if (kind !== 'SERVICIO') return undefined;
+    return validateServiceReference(reference, selectedProduct);
+  }, [kind, reference, selectedProduct]);
+
+  const amountError = useMemo(() => {
+    if (kind !== 'SERVICIO') return undefined;
+    return validatePaymentAmount(amount, {
+      maxBalance: selectedAccountObj?.balance,
+      fixedPrice: selectedProduct?.price,
+    });
+  }, [kind, amount, selectedAccountObj?.balance, selectedProduct?.price]);
+
   const filteredProducts = useMemo(() => {
     const list = (productsQuery.data ?? []).filter((p) => p.kind === kind);
+    if (searchError) return list;
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter(
       (p) => p.name.toLowerCase().includes(q) || p.serviceName.toLowerCase().includes(q),
     );
-  }, [productsQuery.data, kind, search]);
+  }, [productsQuery.data, kind, search, searchError]);
+
+  // En plataforma Web los pagos están estrictamente prohibidos: solo app móvil con huella digital
+  if (!paymentsAllowed) {
+    return (
+      <Screen>
+        <Text style={styles.title}>Pagos y recargas</Text>
+        <Card style={styles.webRestrictionCard}>
+          <View style={styles.webBadgeCircle}>
+            <Ionicons name="finger-print" size={42} color={colors.primary} />
+          </View>
+          <Text style={styles.webRestrictionTitle}>
+            Pagos exclusivos en la aplicación móvil con huella digital
+          </Text>
+          <Text style={styles.webRestrictionBody}>
+            Por tu seguridad bancaria, la versión web es únicamente de consulta. Todas las recargas
+            y pagos de servicios vía GestoPago requieren verificación biométrica con tu huella
+            digital desde la aplicación móvil.
+          </Text>
+          <View style={styles.webActions}>
+            <Button
+              title="Consultar catálogo de servicios"
+              variant="secondary"
+              onPress={() => router.push('/(tabs)/catalog')}
+            />
+            <Button
+              title="Ver historial de pagos"
+              variant="outline"
+              onPress={() => router.push('/(tabs)/history')}
+            />
+          </View>
+        </Card>
+      </Screen>
+    );
+  }
 
   const handleValidateReference = async () => {
     setFormError(null);
     setReferenceValidation(null);
+    setReferenceTouched(true);
+    if (amount.trim()) {
+      setAmountTouched(true);
+    }
+
     if (!selectedProduct) {
       setFormError('Selecciona un producto del catálogo.');
       return;
     }
-    const cleanRef = reference.trim();
-    if (!cleanRef) {
-      setFormError('Ingresa la referencia de pago para validarla.');
+    if (referenceError) {
+      setFormError(referenceError);
       return;
     }
+
     const parsedAmount = amount.trim() ? Number(amount) : selectedProduct.price;
-    if (parsedAmount !== undefined && (!Number.isFinite(parsedAmount) || parsedAmount <= 0)) {
-      setFormError('Ingresa un monto válido mayor a $0.00 antes de validar la referencia.');
-      return;
+    if (amount.trim()) {
+      const preAmountErr = validatePaymentAmount(amount, {
+        fixedPrice: selectedProduct.price,
+      });
+      if (preAmountErr) {
+        setFormError(preAmountErr);
+        return;
+      }
     }
+
     try {
       const result = await validateRefMutation.mutateAsync({
         idServicio: selectedProduct.idServicio,
         idProducto: selectedProduct.idProducto,
-        reference: cleanRef,
+        reference: reference.trim(),
         amount: parsedAmount,
       });
       setReferenceValidation(result);
@@ -132,30 +238,37 @@ export function PaymentsScreen() {
   };
 
   const canContinue =
-    kind === 'RECARGA' || (kind === 'SERVICIO' && Boolean(referenceValidation?.valid));
+    Boolean(selectedProduct) &&
+    !accountError &&
+    (kind === 'RECARGA'
+      ? !phoneError
+      : !referenceError && !amountError && Boolean(referenceValidation?.valid));
 
-  const handlePrepareConfirm = () => {
+  const handlePrepareConfirm = async () => {
     setFormError(null);
+    setPhoneTouched(true);
+    setReferenceTouched(true);
+    setAmountTouched(true);
+
     if (!selectedProduct) {
       setFormError('Selecciona un producto del catálogo.');
       return;
     }
-    if (!selectedAccount) {
-      setFormError('Selecciona una cuenta de cargo.');
+    if (accountError) {
+      setFormError(accountError);
       return;
     }
-    if (kind === 'RECARGA' && !/^[0-9]{10}$/.test(phone.trim())) {
-      setFormError('Ingresa un número telefónico válido de 10 dígitos.');
+    if (kind === 'RECARGA' && phoneError) {
+      setFormError(phoneError);
       return;
     }
     if (kind === 'SERVICIO') {
-      if (!reference.trim()) {
-        setFormError('Ingresa la referencia de pago.');
+      if (referenceError) {
+        setFormError(referenceError);
         return;
       }
-      const num = Number(amount);
-      if (!Number.isFinite(num) || num <= 0) {
-        setFormError('Ingresa un monto válido mayor a $0.00.');
+      if (amountError) {
+        setFormError(amountError);
         return;
       }
       if (!referenceValidation?.valid) {
@@ -163,19 +276,17 @@ export function PaymentsScreen() {
         return;
       }
     }
-    setConfirmPassword('');
+
+    const bioReady = await isBiometricConfirmationAvailable();
+    setBiometricAvailable(bioReady);
     setConfirmError(null);
     setConfirmOpen(true);
   };
 
-  const handleConfirmPay = async (mode: 'PASSWORD' | 'BIOMETRIC') => {
+  const handleConfirmPayWithFingerprint = async () => {
     if (!selectedProduct) return;
     setConfirmError(null);
     setFormError(null);
-    if (mode === 'PASSWORD' && !confirmPassword.trim()) {
-      setConfirmError('Ingresa tu contraseña para confirmar el pago.');
-      return;
-    }
     try {
       const receipt = await payMutation.mutateAsync({
         accountNumber: selectedAccount,
@@ -185,20 +296,15 @@ export function PaymentsScreen() {
         reference: kind === 'SERVICIO' ? reference.trim() : undefined,
         amount: kind === 'SERVICIO' ? Number(amount) : undefined,
         referenceValidated: kind === 'SERVICIO' ? Boolean(referenceValidation?.valid) : true,
-        confirmationPassword: mode === 'PASSWORD' ? confirmPassword : undefined,
-        useBiometricConfirmation: mode === 'BIOMETRIC',
+        useBiometricConfirmation: true,
       });
       setConfirmOpen(false);
-      setConfirmPassword('');
       receiptStore.set(receipt);
       router.push('/payment/receipt');
     } catch (e) {
       setConfirmError(toAppError(e).message);
     }
   };
-
-  const effectiveAmount =
-    kind === 'RECARGA' ? (selectedProduct?.price ?? 0) : Number(amount) || 0;
 
   return (
     <Screen refreshing={productsQuery.isRefetching} onRefresh={() => void productsQuery.refetch()}>
@@ -218,6 +324,9 @@ export function PaymentsScreen() {
                 setSelectedProduct(null);
                 setReferenceValidation(null);
                 setFormError(null);
+                setPhoneTouched(false);
+                setReferenceTouched(false);
+                setAmountTouched(false);
               }}
             >
               <Text style={[styles.tabText, active && styles.tabTextActive]}>
@@ -232,11 +341,13 @@ export function PaymentsScreen() {
         <Input
           label="Buscar compañía o producto"
           placeholder="Ej. Telcel, CFE, Izzi, Totalplay..."
+          maxLength={60}
           value={search}
           onChangeText={(val) => {
             setSearch(val);
             setVisibleCount(PAGE_STEP);
           }}
+          error={searchError}
         />
 
         {productsQuery.isLoading ? (
@@ -282,6 +393,9 @@ export function PaymentsScreen() {
                       setSelectedProduct(p);
                       setReferenceValidation(null);
                       setFormError(null);
+                      if (p.kind === 'SERVICIO' && p.price && p.price > 0) {
+                        setAmount(String(p.price));
+                      }
                     }}
                   />
                 </View>
@@ -321,15 +435,26 @@ export function PaymentsScreen() {
               );
             })}
           </View>
+          {accountError ? (
+            <Text accessibilityRole="alert" style={styles.error}>
+              {accountError}
+            </Text>
+          ) : null}
 
           {kind === 'RECARGA' ? (
             <Input
               label="Número de teléfono (10 dígitos)"
               placeholder="5512345678"
-              keyboardType="phone-pad"
+              keyboardType="number-pad"
               maxLength={10}
               value={phone}
-              onChangeText={setPhone}
+              onBlur={() => setPhoneTouched(true)}
+              onChangeText={(val) => {
+                const digitsOnly = val.replace(/\s+/g, '');
+                setPhone(digitsOnly);
+                setFormError(null);
+              }}
+              error={phoneTouched || phone.length > 0 ? phoneError : undefined}
               hint={
                 selectedProduct.price
                   ? `Monto fijo de la recarga: ${formatCurrency(selectedProduct.price)} (sin comisión para ti)`
@@ -341,28 +466,35 @@ export function PaymentsScreen() {
               <Input
                 label="Referencia o número de contrato"
                 placeholder="Captura los dígitos de tu recibo"
+                maxLength={60}
                 value={reference}
+                onBlur={() => setReferenceTouched(true)}
                 onChangeText={(val) => {
                   setReference(val);
                   if (referenceValidation) setReferenceValidation(null);
                   setFormError(null);
                 }}
+                error={referenceTouched || reference.length > 0 ? referenceError : undefined}
                 hint={
                   selectedProduct.referenceType
                     ? `Formato esperado: ${selectedProduct.referenceType}`
-                    : undefined
+                    : 'Entre 4 y 60 caracteres sin espacios'
                 }
               />
               <Input
                 label="Monto a pagar (MXN)"
                 placeholder="150.00"
                 keyboardType="decimal-pad"
+                maxLength={13}
                 value={amount}
+                onBlur={() => setAmountTouched(true)}
                 onChangeText={(val) => {
                   setAmount(val);
                   if (referenceValidation) setReferenceValidation(null);
                   setFormError(null);
                 }}
+                error={amountTouched || amount.length > 0 ? amountError : undefined}
+                hint="Importe positivo con hasta 2 decimales"
               />
 
               <Button
@@ -372,6 +504,7 @@ export function PaymentsScreen() {
                     : 'Validar referencia'
                 }
                 variant="secondary"
+                disabled={Boolean(referenceError) || (amount.trim().length > 0 && Boolean(amountError))}
                 loading={validateRefMutation.isPending}
                 onPress={() => void handleValidateReference()}
               />
@@ -420,6 +553,18 @@ export function PaymentsScreen() {
             </>
           )}
 
+          {!biometricAvailable ? (
+            <View style={styles.biometricNotice}>
+              <Ionicons name="finger-print" size={20} color={colors.warning} />
+              <View style={styles.biometricNoticeTexts}>
+                <Text style={styles.biometricNoticeTitle}>Huella digital requerida para pagar</Text>
+                <Text style={styles.biometricNoticeBody}>
+                  Activa tu huella digital en la sección Perfil antes de autorizar pagos.
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
           {formError ? (
             <Text accessibilityRole="alert" style={styles.error}>
               {formError}
@@ -427,33 +572,36 @@ export function PaymentsScreen() {
           ) : null}
 
           <Button
-            title="Continuar y revisar pago"
+            title="Continuar y autorizar con huella"
             disabled={!canContinue}
             loading={payMutation.isPending}
-            onPress={handlePrepareConfirm}
+            onPress={() => void handlePrepareConfirm()}
           />
         </Card>
       ) : null}
 
       <AppModal
         visible={confirmOpen}
-        title="Resumen y confirmación de pago"
+        title="Autorización biométrica de pago"
         onRequestClose={() => setConfirmOpen(false)}
         actions={
           <>
-            <Button
-              title="Confirmar con contraseña y pagar"
-              loading={payMutation.isPending}
-              onPress={() => void handleConfirmPay('PASSWORD')}
-            />
-            {Platform.OS !== 'web' && biometricAvailable ? (
+            {biometricAvailable ? (
               <Button
-                title="Autorizar con huella digital"
-                variant="secondary"
+                title="Autorizar pago con huella digital"
                 loading={payMutation.isPending}
-                onPress={() => void handleConfirmPay('BIOMETRIC')}
+                onPress={() => void handleConfirmPayWithFingerprint()}
               />
-            ) : null}
+            ) : (
+              <Button
+                title="Ir a Perfil para activar huella digital"
+                variant="secondary"
+                onPress={() => {
+                  setConfirmOpen(false);
+                  router.push('/(tabs)/profile');
+                }}
+              />
+            )}
             <Button title="Cancelar" variant="ghost" onPress={() => setConfirmOpen(false)} />
           </>
         }
@@ -500,13 +648,19 @@ export function PaymentsScreen() {
           </View>
         ) : null}
 
-        <Input
-          label="Contraseña de tu cuenta"
-          placeholder="Ingresa tu contraseña para confirmar"
-          secureTextEntry
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-        />
+        <View style={styles.fingerprintPromptBox}>
+          <Ionicons
+            name="finger-print"
+            size={28}
+            color={biometricAvailable ? colors.primary : colors.warning}
+          />
+          <Text style={styles.fingerprintPromptText}>
+            {biometricAvailable
+              ? 'Por seguridad, este pago solo puede autorizarse escaneando tu huella digital registrada en este dispositivo móvil.'
+              : 'Aún no tienes una huella digital activa en este dispositivo. Enrólala en Perfil para poder autorizar pagos.'}
+          </Text>
+        </View>
+
         {confirmError ? (
           <Text accessibilityRole="alert" style={styles.error}>
             {confirmError}
@@ -518,34 +672,68 @@ export function PaymentsScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { ...typography.title, color: colors.primary },
-  tabs: { flexDirection: 'row', gap: spacing.sm },
+  title: { ...typography.title, color: colors.text },
+  webRestrictionCard: {
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.xxl,
+  },
+  webBadgeCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  webRestrictionTitle: {
+    ...typography.heading,
+    color: colors.text,
+    textAlign: 'center',
+  },
+  webRestrictionBody: {
+    ...typography.body,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  webActions: {
+    width: '100%',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  tabs: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    backgroundColor: colors.surfaceMuted,
+    padding: 4,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   tab: {
     flex: 1,
     paddingVertical: spacing.md,
     borderRadius: radii.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    backgroundColor: 'transparent',
     alignItems: 'center',
   },
-  tabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  tabText: { ...typography.subheading, color: colors.primary },
+  tabActive: { backgroundColor: colors.primary },
+  tabText: { ...typography.subheading, color: colors.textMuted, fontWeight: '700' },
   tabTextActive: { color: colors.textOnPrimary },
   card: { gap: spacing.md },
   productList: { gap: spacing.xs },
   productRow: {
     borderRadius: radii.md,
     paddingHorizontal: spacing.sm,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: 'transparent',
   },
   productSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.background,
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
   },
-  sectionTitle: { ...typography.subheading, color: colors.primary },
-  label: { ...typography.caption, color: colors.textMuted, fontWeight: '600' },
+  sectionTitle: { ...typography.subheading, color: colors.text, fontWeight: '700' },
+  label: { ...typography.caption, color: colors.text, fontWeight: '600' },
   accountChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   chip: {
     paddingHorizontal: spacing.md,
@@ -553,10 +741,11 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.border,
+    backgroundColor: colors.surfaceMuted,
   },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { ...typography.caption, color: colors.text },
-  chipTextActive: { color: colors.textOnPrimary, fontWeight: '600' },
+  chipText: { ...typography.caption, color: colors.text, fontWeight: '600' },
+  chipTextActive: { color: colors.textOnPrimary, fontWeight: '700' },
   validationBox: {
     borderRadius: radii.md,
     padding: spacing.md,
@@ -574,8 +763,21 @@ const styles = StyleSheet.create({
   validationTitle: { ...typography.subheading, color: colors.text },
   validationText: { ...typography.body, color: colors.text },
   validationMeta: { ...typography.caption, color: colors.textMuted },
+  biometricNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: colors.warningBg,
+    borderWidth: 1,
+    borderColor: colors.warning,
+  },
+  biometricNoticeTexts: { flex: 1, gap: 2 },
+  biometricNoticeTitle: { ...typography.caption, color: colors.warning, fontWeight: '700' },
+  biometricNoticeBody: { ...typography.caption, color: colors.text },
   summaryBox: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.surfaceMuted,
     borderRadius: radii.md,
     padding: spacing.md,
     gap: spacing.xs,
@@ -589,8 +791,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   summaryHeaderTexts: { flex: 1 },
-  summaryService: { ...typography.caption, color: colors.textMuted, fontWeight: '700' },
-  summaryProduct: { ...typography.subheading, color: colors.primary },
+  summaryService: { ...typography.caption, color: colors.primary, fontWeight: '700' },
+  summaryProduct: { ...typography.subheading, color: colors.text, fontWeight: '700' },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -598,6 +800,21 @@ const styles = StyleSheet.create({
   },
   summaryLabel: { ...typography.caption, color: colors.textMuted },
   summaryValue: { ...typography.caption, color: colors.text, fontWeight: '600' },
-  summaryAmount: { ...typography.subheading, color: colors.primary, fontWeight: '700' },
+  summaryAmount: { ...typography.subheading, color: colors.primary, fontWeight: '800' },
+  fingerprintPromptBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  fingerprintPromptText: {
+    ...typography.caption,
+    color: colors.text,
+    flex: 1,
+  },
   error: { ...typography.caption, color: colors.danger },
 });

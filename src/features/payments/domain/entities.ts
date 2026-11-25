@@ -56,11 +56,9 @@ export interface PaymentInput {
   amount?: number;
   /** En pagos de SERVICIO, indica que la referencia ya fue validada con éxito. */
   referenceValidated?: boolean;
-  /** Contraseña capturada al confirmar el pago (web y móvil). */
-  confirmationPassword?: string;
-  /** Si es true, solicita confirmación por huella digital en dispositivo móvil. */
+  /** En dispositivo móvil, solicita confirmación biométrica con huella digital. */
   useBiometricConfirmation?: boolean;
-  /** Token de confirmación de un solo uso si ya fue emitido previamente. */
+  /** Token biométrico de confirmación de un solo uso si ya fue emitido previamente. */
   confirmationToken?: string;
 }
 

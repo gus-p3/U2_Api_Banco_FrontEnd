@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radii, typography } from '../theme';
@@ -6,9 +6,9 @@ import { colors, radii, typography } from '../theme';
 export interface ProviderLogoProps {
   /** Nombre del proveedor o servicio para calcular las iniciales del placeholder. */
   name: string;
-  /** URL del logotipo si existe; si es nula o falla la carga se muestra el avatar neutro con iniciales. */
+  /** URL del logotipo si existe; si falla la carga se muestra el avatar limpio con iniciales. */
   logoUrl?: string | null;
-  /** Tamaño en px del contenedor cuadrado/circular (por defecto 40). */
+  /** Tamaño en px del contenedor (por defecto 44). */
   size?: number;
 }
 
@@ -25,21 +25,28 @@ function getInitials(name: string): string {
   return `${first.charAt(0)}${second.charAt(0)}`.toUpperCase();
 }
 
-function ProviderLogoBase({ name, logoUrl, size = 40 }: ProviderLogoProps) {
+function ProviderLogoBase({ name, logoUrl, size = 44 }: ProviderLogoProps) {
   const [loading, setLoading] = useState(Boolean(logoUrl));
   const [failed, setFailed] = useState(false);
 
+  useEffect(() => {
+    setFailed(false);
+    setLoading(Boolean(logoUrl));
+  }, [logoUrl]);
+
   const showImage = Boolean(logoUrl && logoUrl.trim().length > 0 && !failed);
   const initials = getInitials(name);
+  const radius = Math.max(radii.sm, Math.round(size * 0.28));
 
   return (
     <View
       style={[
         styles.container,
+        showImage ? styles.containerImage : styles.containerFallback,
         {
           width: size,
           height: size,
-          borderRadius: Math.round(size / 2),
+          borderRadius: radius,
         },
       ]}
       accessibilityRole="image"
@@ -49,7 +56,7 @@ function ProviderLogoBase({ name, logoUrl, size = 40 }: ProviderLogoProps) {
         <>
           <Image
             source={{ uri: logoUrl! }}
-            style={{ width: size, height: size, borderRadius: Math.round(size / 2) }}
+            style={{ width: size - 8, height: size - 8 }}
             resizeMode="contain"
             onLoadStart={() => setLoading(true)}
             onLoadEnd={() => setLoading(false)}
@@ -75,12 +82,18 @@ export const ProviderLogo = memo(ProviderLogoBase);
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  containerImage: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+  },
+  containerFallback: {
+    backgroundColor: colors.primarySoft,
+    borderColor: '#BFDBFE',
   },
   loaderOverlay: {
     position: 'absolute',
@@ -90,15 +103,14 @@ const styles = StyleSheet.create({
     left: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
   },
   initials: {
     ...typography.caption,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.primary,
   },
   initialsSmall: {
     fontSize: 11,
   },
 });
-

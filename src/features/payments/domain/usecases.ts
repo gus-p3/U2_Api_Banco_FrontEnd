@@ -1,5 +1,12 @@
+import { Platform } from 'react-native';
+
 import { AppError } from '@/core/errors/AppError';
 import { messageForCode } from '@/core/errors/errorMessages';
+import {
+  validatePaymentAmount,
+  validatePhone10,
+  validateServiceReference,
+} from '@/core/validation/validators';
 
 import type {
   PaymentInput,
@@ -18,35 +25,51 @@ export interface PaymentsRepository {
 
 export interface PayDeps {
   repo: PaymentsRepository;
-  /** Obtiene un token de confirmación de un solo uso con la contraseña del usuario. */
-  confirmWithPassword?: (password: string) => Promise<string>;
-  /** Obtiene un token de confirmación de un solo uso con huella digital (móvil). */
+  /** Obtiene un token de confirmación de un solo uso exclusivamente con huella digital (móvil). */
   confirmWithFingerprint?: () => Promise<string>;
+  /** Permite sobreescribir la verificación de plataforma en pruebas unitarias. */
+  isMobilePlatform?: () => boolean;
 }
 
 const failWith = (
-  code: 'STRONG_AUTH_REQUIRED' | 'INVALID_PAYMENT_REQUEST' | 'REFERENCE_NOT_VALIDATED',
+  code:
+    | 'STRONG_AUTH_REQUIRED'
+    | 'INVALID_PAYMENT_REQUEST'
+    | 'REFERENCE_NOT_VALIDATED'
+    | 'UNSUPPORTED_PLATFORM',
   message?: string,
 ): never => {
   throw new AppError({ code, message: message ?? messageForCode(code) });
 };
 
-/** Valida los datos del pago antes de llamar al backend. */
+/** Valida estrictamente todos los campos del pago antes de invocar al backend. */
 export function validatePaymentInput(input: PaymentInput): void {
-  if (!/^[0-9]{10}$/.test(input.accountNumber))
-    failWith('INVALID_PAYMENT_REQUEST', 'Selecciona una cuenta válida.');
+  if (!/^[0-9]{10}$/.test(input.accountNumber)) {
+    failWith('INVALID_PAYMENT_REQUEST', 'Selecciona una cuenta válida de 10 dígitos.');
+  }
+  if (!input.product || input.product.idServicio <= 0 || input.product.idProducto <= 0) {
+    failWith('INVALID_PAYMENT_REQUEST', 'Selecciona un producto válido del catálogo.');
+  }
   if (input.kind === 'RECARGA') {
-    if (!input.phone || !/^[0-9]{10}$/.test(input.phone)) {
-      failWith('INVALID_PAYMENT_REQUEST', 'El teléfono debe tener 10 dígitos.');
+    const phoneErr = validatePhone10(input.phone ?? '');
+    if (phoneErr) {
+      failWith('INVALID_PAYMENT_REQUEST', phoneErr);
     }
-    if (input.reference) failWith('INVALID_PAYMENT_REQUEST', 'Una recarga no lleva referencia.');
+    if (input.reference) {
+      failWith('INVALID_PAYMENT_REQUEST', 'Una recarga no lleva referencia.');
+    }
   } else {
-    if (!input.reference || input.reference.length > 100) {
-      failWith('INVALID_PAYMENT_REQUEST', 'Captura la referencia del servicio (máx. 100 caracteres).');
+    const refErr = validateServiceReference(input.reference ?? '', input.product);
+    if (refErr) {
+      failWith('INVALID_PAYMENT_REQUEST', refErr);
     }
-    if (input.phone) failWith('INVALID_PAYMENT_REQUEST', 'Un pago de servicio no lleva teléfono.');
-    if (!input.amount || input.amount <= 0 || Math.round(input.amount * 100) / 100 !== input.amount) {
-      failWith('INVALID_PAYMENT_REQUEST', 'Captura un monto mayor a 0 con máximo 2 decimales.');
+    if (input.phone) {
+      failWith('INVALID_PAYMENT_REQUEST', 'Un pago de servicio no lleva teléfono.');
+    }
+    const amtStr = input.amount !== undefined ? String(input.amount) : '';
+    const amtErr = validatePaymentAmount(amtStr);
+    if (amtErr) {
+      failWith('INVALID_PAYMENT_REQUEST', amtErr);
     }
     if (!input.referenceValidated) {
       failWith('REFERENCE_NOT_VALIDATED');
@@ -55,29 +78,28 @@ export function validatePaymentInput(input: PaymentInput): void {
 }
 
 /**
- * Caso de uso: pagar recarga o servicio (en web y móvil).
- * Requiere reautenticación reciente mediante contraseña o huella digital para obtener un
- * token de confirmación de un solo uso (header X-Confirmation-Token).
+ * Caso de uso: pagar recarga o servicio.
+ * Exclusivo de la app móvil (bloqueado en Web) y requiere obligatoriamente autorización
+ * con huella digital para emitir el token de un solo uso (header X-Confirmation-Token).
  */
 export async function payProduct(deps: PayDeps, input: PaymentInput): Promise<PaymentReceipt> {
+  const mobileAllowed = deps.isMobilePlatform
+    ? deps.isMobilePlatform()
+    : Platform.OS !== 'web';
+
+  if (!mobileAllowed) {
+    return failWith('UNSUPPORTED_PLATFORM');
+  }
+
   validatePaymentInput(input);
 
   let confirmationToken = input.confirmationToken?.trim();
 
   if (!confirmationToken) {
-    if (input.useBiometricConfirmation) {
-      if (!deps.confirmWithFingerprint) {
-        return failWith('STRONG_AUTH_REQUIRED');
-      }
-      confirmationToken = await deps.confirmWithFingerprint();
-    } else if (input.confirmationPassword && input.confirmationPassword.trim().length > 0) {
-      if (!deps.confirmWithPassword) {
-        return failWith('STRONG_AUTH_REQUIRED');
-      }
-      confirmationToken = await deps.confirmWithPassword(input.confirmationPassword);
-    } else {
+    if (!input.useBiometricConfirmation || !deps.confirmWithFingerprint) {
       return failWith('STRONG_AUTH_REQUIRED');
     }
+    confirmationToken = await deps.confirmWithFingerprint();
   }
 
   if (!confirmationToken) {

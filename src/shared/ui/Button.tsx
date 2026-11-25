@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -23,8 +24,8 @@ export interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> 
 
 const variantStyles: Record<Variant, { bg: string; fg: string; border: string }> = {
   primary: { bg: colors.primary, fg: colors.textOnPrimary, border: colors.primary },
-  secondary: { bg: colors.accent, fg: colors.primaryDark, border: colors.accent },
-  outline: { bg: 'transparent', fg: colors.primary, border: colors.primary },
+  secondary: { bg: colors.primarySoft, fg: colors.primary, border: '#BFDBFE' },
+  outline: { bg: colors.surface, fg: colors.primary, border: colors.border },
   ghost: { bg: 'transparent', fg: colors.primary, border: 'transparent' },
   danger: { bg: colors.danger, fg: colors.textOnPrimary, border: colors.danger },
 };
@@ -49,6 +50,7 @@ function ButtonBase({
       style={({ pressed }) => [
         styles.base,
         { backgroundColor: v.bg, borderColor: v.border },
+        variant === 'primary' && styles.primaryShadow,
         fullWidth && styles.full,
         pressed && styles.pressed,
         isDisabled && styles.disabled,
@@ -67,17 +69,29 @@ function ButtonBase({
 
 export const Button = memo(ButtonBase);
 
+const primaryShadow = Platform.select<ViewStyle>({
+  web: { boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)' } as ViewStyle,
+  default: {
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+}) as ViewStyle;
+
 const styles = StyleSheet.create({
   base: {
     minHeight: layout.minTouchTarget,
     paddingHorizontal: spacing.xl,
     borderRadius: radii.md,
-    borderWidth: 1.5,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  primaryShadow,
   full: { alignSelf: 'stretch' },
-  label: { ...typography.subheading },
-  pressed: { opacity: 0.85 },
-  disabled: { opacity: 0.5 },
+  label: { ...typography.subheading, fontWeight: '700' },
+  pressed: { opacity: 0.88, transform: [{ scale: 0.99 }] },
+  disabled: { opacity: 0.45 },
 });

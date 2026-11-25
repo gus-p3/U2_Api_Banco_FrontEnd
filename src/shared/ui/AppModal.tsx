@@ -50,9 +50,11 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     padding: spacing.xl,
     gap: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
     ...shadows.card,
   },
-  title: { ...typography.heading, color: colors.primary },
-  message: { ...typography.body, color: colors.text },
+  title: { ...typography.heading, color: colors.text },
+  message: { ...typography.body, color: colors.textMuted },
   actions: { gap: spacing.sm, marginTop: spacing.sm },
 });

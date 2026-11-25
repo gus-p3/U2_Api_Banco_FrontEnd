@@ -40,25 +40,16 @@ export async function enableBiometrics(
   params: { idClient: number; email: string },
 ): Promise<void> {
   if (!(await deps.biometrics.isAvailable())) return fail('BIOMETRIC_UNAVAILABLE');
-  const ok = await deps.biometrics.authenticate('Confirma tu huella para activar el acceso biométrico');
+  const ok = await deps.biometrics.authenticate(
+    'Confirma tu huella para activar el acceso biométrico',
+  );
   if (!ok) return fail('BIOMETRIC_CANCELLED');
   const secret = await deps.biometrics.generateSecret();
   await deps.repo.enrollBiometric(params.idClient, BIOMETRIC_TYPE, secret);
   await deps.store.saveBiometricSecret(params.email, secret);
 }
 
-/** Confirma una operación sensible reingresando la contraseña del usuario autenticado. */
-export async function confirmOperationWithPassword(
-  deps: { repo: AuthRepository },
-  password: string,
-): Promise<string> {
-  if (!password || !password.trim()) {
-    return fail('STRONG_AUTH_REQUIRED');
-  }
-  return deps.repo.confirmOperation({ password });
-}
-
-/** Confirma una operación sensible usando la huella registrada en el dispositivo. */
+/** Confirma una operación de pago usando exclusivamente la huella registrada en el dispositivo móvil. */
 export async function confirmOperationWithBiometrics(
   deps: { repo: AuthRepository; store: SecretStore; biometrics: BiometricGateway },
   email: string,
@@ -66,7 +57,7 @@ export async function confirmOperationWithBiometrics(
   if (!(await deps.biometrics.isAvailable())) return fail('BIOMETRIC_UNAVAILABLE');
   const secret = await deps.store.getBiometricSecret(email);
   if (!secret) return fail('BIOMETRIC_NOT_ENROLLED');
-  const ok = await deps.biometrics.authenticate('Confirma tu huella para autorizar el pago');
+  const ok = await deps.biometrics.authenticate('Escanea tu huella digital para autorizar el pago');
   if (!ok) return fail('BIOMETRIC_CANCELLED');
   return deps.repo.confirmOperation({
     biometricType: BIOMETRIC_TYPE,

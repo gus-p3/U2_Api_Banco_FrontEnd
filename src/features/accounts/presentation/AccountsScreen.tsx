@@ -58,9 +58,15 @@ export function AccountsScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { ...typography.title, color: colors.primary },
-  summary: { gap: spacing.xs },
-  summaryLabel: { ...typography.caption, color: colors.accentLight },
+  title: { ...typography.title, color: colors.text },
+  summary: { gap: spacing.xs, paddingVertical: spacing.xl },
+  summaryLabel: {
+    ...typography.caption,
+    color: 'rgba(255, 255, 255, 0.85)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    fontWeight: '700',
+  },
   summaryAmount: { ...typography.amount, color: colors.textOnPrimary },
   listCard: { gap: spacing.xs },
 });

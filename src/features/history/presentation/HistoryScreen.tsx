@@ -1,10 +1,12 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { toAppError } from '@/core/errors/toAppError';
 import { formatCurrency, formatDateTime } from '@/core/utils/format';
+import { validateDateRange } from '@/core/validation/validators';
 import type { PaymentStatus } from '@/features/payments/domain/entities';
+import { isPaymentsSupported } from '@/features/payments/presentation/hooks';
 import { colors, radii, spacing, typography } from '@/shared/theme';
 import {
   Button,
@@ -45,15 +47,24 @@ function badgeForStatus(status: PaymentStatus) {
 
 export function HistoryScreen() {
   const router = useRouter();
+  const paymentsAllowed = isPaymentsSupported();
   const [estado, setEstado] = useState<PaymentStatus | undefined>(undefined);
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
   const [page, setPage] = useState(0);
 
+  const { desdeError, hastaError, validRange } = useMemo(
+    () => validateDateRange(desde, hasta),
+    [desde, hasta],
+  );
+
+  const validDesdeParam = !desdeError && validRange && desde.trim() ? desde.trim() : undefined;
+  const validHastaParam = !hastaError && validRange && hasta.trim() ? hasta.trim() : undefined;
+
   const historyQuery = usePaymentHistory({
     estado,
-    desde: desde.trim() || undefined,
-    hasta: hasta.trim() || undefined,
+    desde: validDesdeParam,
+    hasta: validHastaParam,
     page,
     size: 10,
   });
@@ -95,22 +106,26 @@ export function HistoryScreen() {
             <Input
               label="Desde (AAAA-MM-DD)"
               placeholder="2026-01-01"
+              maxLength={10}
               value={desde}
               onChangeText={(val) => {
                 setDesde(val);
                 setPage(0);
               }}
+              error={desdeError}
             />
           </View>
           <View style={styles.dateCol}>
             <Input
               label="Hasta (AAAA-MM-DD)"
               placeholder="2026-12-31"
+              maxLength={10}
               value={hasta}
               onChangeText={(val) => {
                 setHasta(val);
                 setPage(0);
               }}
+              error={hastaError}
             />
           </View>
         </View>
@@ -127,14 +142,15 @@ export function HistoryScreen() {
         <EmptyState
           title="Sin pagos registrados"
           description="No se encontraron pagos con los filtros seleccionados."
-          actionLabel="Ir a pagos"
-          onAction={() => router.push('/(tabs)/payments')}
+          actionLabel={paymentsAllowed ? 'Ir a pagos' : 'Ver catálogo'}
+          onAction={() => router.push(paymentsAllowed ? '/(tabs)/payments' : '/(tabs)/catalog')}
         />
       ) : (
         <View style={styles.listContainer}>
           {items.map((item) => {
             const badge = badgeForStatus(item.status);
-            const folio = item.authorization ?? (item.transactionId ? String(item.transactionId) : item.upc);
+            const folio =
+              item.authorization ?? (item.transactionId ? String(item.transactionId) : item.upc);
             return (
               <Pressable
                 key={item.id}
@@ -165,6 +181,7 @@ export function HistoryScreen() {
                   <View style={styles.folioRow}>
                     <Text style={styles.folioText}>
                       Folio / UPC: {folio ?? item.upc ?? 'N/D'}
+                      {item.gatewayCode ? ` · Cód. GestoPago: ${item.gatewayCode}` : ''}
                     </Text>
                     <Text style={styles.detailLink}>Ver detalle →</Text>
                   </View>
@@ -199,22 +216,22 @@ export function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { ...typography.title, color: colors.primary },
+  title: { ...typography.title, color: colors.text },
   subtitle: { ...typography.body, color: colors.textMuted },
   filterCard: { gap: spacing.sm },
-  filterLabel: { ...typography.caption, color: colors.textMuted, fontWeight: '600' },
+  filterLabel: { ...typography.caption, color: colors.text, fontWeight: '600' },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   chip: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingVertical: 7,
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceMuted,
   },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { ...typography.caption, color: colors.text },
-  chipTextActive: { color: colors.textOnPrimary, fontWeight: '600' },
+  chipText: { ...typography.caption, color: colors.text, fontWeight: '600' },
+  chipTextActive: { color: colors.textOnPrimary, fontWeight: '700' },
   dateRow: { flexDirection: 'row', gap: spacing.sm },
   dateCol: { flex: 1 },
   listContainer: { gap: spacing.md },
@@ -237,7 +254,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: spacing.xs,
   },
-  folioText: { ...typography.caption, color: colors.textMuted },
+  folioText: { ...typography.caption, color: colors.textMuted, flexShrink: 1 },
   detailLink: { ...typography.caption, color: colors.primary, fontWeight: '600' },
   paginationRow: {
     flexDirection: 'row',
@@ -247,4 +264,3 @@ const styles = StyleSheet.create({
   },
   pageIndicator: { ...typography.caption, color: colors.text, fontWeight: '600' },
 });
-

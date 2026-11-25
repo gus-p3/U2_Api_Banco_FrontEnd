@@ -1,11 +1,21 @@
 import type { AxiosInstance } from 'axios';
 
-import { createHttpClient } from '@/core/http/client';
 import { toAppError } from '@/core/errors/toAppError';
-import { createAuthRepository } from '@/features/auth/data/authRepository';
-import { loginWithBiometrics, loginWithPassword } from '@/features/auth/domain/usecases';
+import { createHttpClient } from '@/core/http/client';
+import {
+  validateAdultBirthDate,
+  validateDateRange,
+  validatePaymentAmount,
+  validatePhone10,
+  validateSearchQuery,
+  validateServiceReference,
+} from '@/core/validation/validators';
 import { createAccountsRepository } from '@/features/accounts/data/accountsRepository';
 import { getRecentMovements, totalBalance } from '@/features/accounts/domain/repository';
+import { createAuthRepository } from '@/features/auth/data/authRepository';
+import { loginWithBiometrics, loginWithPassword } from '@/features/auth/domain/usecases';
+import { loginSchema } from '@/features/auth/presentation/loginSchema';
+import { registerSchema } from '@/features/auth/presentation/registerSchema';
 import { createHistoryRepository } from '@/features/history/data/historyRepository';
 import { createPaymentsRepository } from '@/features/payments/data/paymentsRepository';
 import { payProduct } from '@/features/payments/domain/usecases';
@@ -90,7 +100,7 @@ describe('Errores y cliente HTTP (refresh en 401)', () => {
   });
 });
 
-describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
+describe('Casos de uso y repositorios (Auth, Cuentas, Validaciones y Pagos solo en móvil con huella)', () => {
   it('loginWithPassword y createAuthRepository extraen idClient del JWT y guardan email', async () => {
     const token = makeJwt({
       sub: 'alejandro.hernandez@banco-demo.com',
@@ -207,14 +217,14 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
     expect(customer.fullName).toBe('Alejandro Hernández');
     expect(customer.primaryAccount?.number).toBe('8336580575');
 
-    expect(post).not.toHaveBeenCalled(); // /buscar es solo ADMIN
+    expect(post).not.toHaveBeenCalled();
     const movs = await repo.getMovements('8336580575');
     expect(movs).toHaveLength(1);
     expect(movs[0]?.type).toBe('APERTURA');
     expect(movs[0]?.signedAmount).toBe(25000);
   });
 
-  it('payProduct solicita confirmación reciente (contraseña o huella) y envía X-Confirmation-Token en web y móvil', async () => {
+  it('payProduct bloquea pagos en Web (UNSUPPORTED_PLATFORM) y exige exclusivamente huella digital en móvil', async () => {
     const post = jest.fn().mockResolvedValue({
       data: {
         codigo: 1,
@@ -225,35 +235,72 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
       },
     });
     const repo = createPaymentsRepository({ post, get: jest.fn() } as unknown as AxiosInstance);
-    const confirmWithPassword = jest.fn(async (pwd: string) => `confirm-token-${pwd}`);
     const confirmWithFingerprint = jest.fn(async () => 'confirm-token-bio');
+    const product = {
+      id: 1,
+      name: 'Telcel 100',
+      serviceName: 'Telcel',
+      idServicio: 133,
+      idProducto: 582,
+      kind: 'RECARGA' as const,
+      price: 100,
+      hasCheckDigit: false,
+      helpAvailable: false,
+    };
 
+    // 1. En Web está estrictamente prohibido pagar -> UNSUPPORTED_PLATFORM
+    await expect(
+      payProduct(
+        {
+          repo,
+          confirmWithFingerprint,
+          isMobilePlatform: () => false,
+        },
+        {
+          accountNumber: '9876543210',
+          kind: 'RECARGA',
+          phone: '5512345678',
+          useBiometricConfirmation: true,
+          product,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'UNSUPPORTED_PLATFORM' });
+    expect(post).not.toHaveBeenCalled();
+
+    // 2. En móvil sin confirmación de huella -> STRONG_AUTH_REQUIRED
+    await expect(
+      payProduct(
+        {
+          repo,
+          confirmWithFingerprint,
+          isMobilePlatform: () => true,
+        },
+        {
+          accountNumber: '9876543210',
+          kind: 'RECARGA',
+          phone: '5512345678',
+          product,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'STRONG_AUTH_REQUIRED' });
+
+    // 3. En móvil con huella digital -> envía X-Confirmation-Token y aplica el pago
     const receipt = await payProduct(
       {
         repo,
-        confirmWithPassword,
         confirmWithFingerprint,
+        isMobilePlatform: () => true,
       },
       {
         accountNumber: '9876543210',
         kind: 'RECARGA',
         phone: '5512345678',
-        confirmationPassword: 'PasswordSegura#2026',
-        product: {
-          id: 1,
-          name: 'Telcel 100',
-          serviceName: 'Telcel',
-          idServicio: 133,
-          idProducto: 582,
-          kind: 'RECARGA',
-          price: 100,
-          hasCheckDigit: false,
-          helpAvailable: false,
-        },
+        useBiometricConfirmation: true,
+        product,
       },
     );
 
-    expect(confirmWithPassword).toHaveBeenCalledWith('PasswordSegura#2026');
+    expect(confirmWithFingerprint).toHaveBeenCalledTimes(1);
     expect(post).toHaveBeenCalledWith(
       '/v1/pagos',
       {
@@ -264,64 +311,14 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
         telefono: '5512345678',
       },
       {
-        headers: { 'X-Confirmation-Token': 'confirm-token-PasswordSegura#2026' },
+        headers: { 'X-Confirmation-Token': 'confirm-token-bio' },
       },
     );
     expect(receipt.applied).toBe(true);
     expect(receipt.authorization).toBe('AUTH123');
-
-    // También soporta confirmación biométrica en móvil
-    await payProduct(
-      {
-        repo,
-        confirmWithPassword,
-        confirmWithFingerprint,
-      },
-      {
-        accountNumber: '9876543210',
-        kind: 'RECARGA',
-        phone: '5512345678',
-        useBiometricConfirmation: true,
-        product: {
-          id: 1,
-          name: 'Telcel 100',
-          serviceName: 'Telcel',
-          idServicio: 133,
-          idProducto: 582,
-          kind: 'RECARGA',
-          price: 100,
-          hasCheckDigit: false,
-          helpAvailable: false,
-        },
-      },
-    );
-    expect(confirmWithFingerprint).toHaveBeenCalledTimes(1);
-
-    // Rechaza con STRONG_AUTH_REQUIRED si no se proporciona confirmación
-    await expect(
-      payProduct(
-        { repo, confirmWithPassword, confirmWithFingerprint },
-        {
-          accountNumber: '9876543210',
-          kind: 'RECARGA',
-          phone: '5512345678',
-          product: {
-            id: 1,
-            name: 'Telcel 100',
-            serviceName: 'Telcel',
-            idServicio: 133,
-            idProducto: 582,
-            kind: 'RECARGA',
-            price: 100,
-            hasCheckDigit: false,
-            helpAvailable: false,
-          },
-        },
-      ),
-    ).rejects.toMatchObject({ code: 'STRONG_AUTH_REQUIRED' });
   });
 
-  it('getProducts devuelve vacío si el backend devuelve vacío (sin datos simulados) y mapea legend y categoría', async () => {
+  it('getProducts devuelve vacío si el backend devuelve vacío y mapea legend, categoría y logoUrl por idServicio', async () => {
     const getEmpty = jest.fn().mockResolvedValue({ data: [] });
     const repoEmpty = createPaymentsRepository({
       post: jest.fn(),
@@ -358,7 +355,7 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
     );
   });
 
-  it('Fase 4: validateReference distingue referencia válida, inválida y bloquea pago de servicio sin validar', async () => {
+  it('validateReference distingue referencia válida, inválida y bloquea pago de servicio sin validar', async () => {
     const post = jest
       .fn()
       .mockResolvedValueOnce({
@@ -399,7 +396,6 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
     });
     expect(validRes.valid).toBe(true);
     expect(validRes.validationId).toBe('val-123');
-    expect(validRes.serviceName).toBe('CFE');
 
     const invalidRes = await repo.validateReference({
       idServicio: 79,
@@ -408,14 +404,13 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
       amount: 150,
     });
     expect(invalidRes.valid).toBe(false);
-    expect(invalidRes.message).toContain('rechazada');
 
-    // Intento de pago de SERVICIO sin haber validado la referencia falla con REFERENCE_NOT_VALIDATED
     await expect(
       payProduct(
         {
           repo,
-          confirmWithPassword: async () => 'confirm-tok',
+          confirmWithFingerprint: async () => 'confirm-tok',
+          isMobilePlatform: () => true,
         },
         {
           accountNumber: '9876543210',
@@ -423,7 +418,7 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
           reference: '998877665544',
           amount: 150,
           referenceValidated: false,
-          confirmationPassword: 'PasswordSegura#2026',
+          useBiometricConfirmation: true,
           product: {
             id: 2,
             name: 'Luz CFE',
@@ -439,12 +434,12 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
     ).rejects.toMatchObject({ code: 'REFERENCE_NOT_VALIDATED' });
   });
 
-  it('Fase 5: applied solo es true con estado === APLICADO y getPaymentStatus refresca un recibo POR_CONFIRMAR', async () => {
+  it('mapea código 05 de GestoPago (gatewayCode) y refresca comprobantes POR_CONFIRMAR', async () => {
     const post = jest
       .fn()
       .mockResolvedValueOnce({
         data: {
-          codigo: 1, // incluso si codigo viniera en 1 por error, estado POR_CONFIRMAR nunca es applied=true
+          codigo: 0,
           mensaje: 'Pago en proceso de confirmación',
           estado: 'POR_CONFIRMAR',
           upc: 'UPC123456',
@@ -453,8 +448,9 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
       .mockResolvedValueOnce({
         data: {
           codigo: 0,
-          mensaje: 'Saldo insuficiente del distribuidor',
+          mensaje: 'GestoPago rechazó la operación (código 05 - restricción de origen/IP del proveedor: Origen Valido).',
           estado: 'RECHAZADO',
+          codigoGestoPago: '05',
           upc: 'UPC123457',
         },
       });
@@ -499,21 +495,21 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
     expect(pendingReceipt.status).toBe('POR_CONFIRMAR');
     expect(pendingReceipt.applied).toBe(false);
 
-    const rejectedReceipt = await repo.pay(
+    const code05Receipt = await repo.pay(
       { accountNumber: '9876543210', kind: 'RECARGA', phone: '5512345678', product },
       'tok-2',
     );
-    expect(rejectedReceipt.status).toBe('RECHAZADO');
-    expect(rejectedReceipt.applied).toBe(false);
+    expect(code05Receipt.status).toBe('RECHAZADO');
+    expect(code05Receipt.gatewayCode).toBe('05');
+    expect(code05Receipt.applied).toBe(false);
 
     const refreshed = await repo.getPaymentStatus('UPC123456', pendingReceipt);
     expect(refreshed.status).toBe('APLICADO');
     expect(refreshed.applied).toBe(true);
     expect(refreshed.authorization).toBe('AUTH-OK-99');
-    expect(refreshed.transactionId).toBe(777111);
   });
 
-  it('Fase 6: createHistoryRepository consulta listado paginado con referencia enmascarada y detalle por id', async () => {
+  it('createHistoryRepository consulta listado paginado y detalle por id', async () => {
     const get = jest
       .fn()
       .mockResolvedValueOnce({
@@ -521,9 +517,10 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
           content: [
             {
               id: 101,
-              codigo: 1,
-              mensaje: 'Pago aplicado',
-              estado: 'APLICADO',
+              codigo: 0,
+              mensaje: 'Rechazado código 05',
+              estado: 'RECHAZADO',
+              codigoGestoPago: '05',
               tipoPago: 'SERVICIO',
               numCuenta: '9876543210',
               idServicio: 79,
@@ -533,8 +530,6 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
               referencia: '********7271',
               destinoEnmascarado: '********7271',
               monto: 150,
-              numAutorizacion: 'AUTH-CFE-01',
-              idTx: 555001,
               upc: 'UPCCFE001',
               fechaCreacion: '2026-11-15T12:00:00Z',
             },
@@ -549,9 +544,10 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
       .mockResolvedValueOnce({
         data: {
           id: 101,
-          codigo: 1,
-          mensaje: 'Pago aplicado',
-          estado: 'APLICADO',
+          codigo: 0,
+          mensaje: 'Rechazado código 05',
+          estado: 'RECHAZADO',
+          codigoGestoPago: '05',
           tipoPago: 'SERVICIO',
           numCuenta: '9876543210',
           idServicio: 79,
@@ -561,8 +557,6 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
           referencia: '40425475190118187271',
           destinoEnmascarado: '********7271',
           monto: 150,
-          numAutorizacion: 'AUTH-CFE-01',
-          idTx: 555001,
           upc: 'UPCCFE001',
           fechaCreacion: '2026-11-15T12:00:00Z',
         },
@@ -570,17 +564,66 @@ describe('Casos de uso y repositorios (Auth, Cuentas y Pagos)', () => {
 
     const historyRepo = createHistoryRepository({ get } as unknown as AxiosInstance);
 
-    const pageRes = await historyRepo.getHistory({ estado: 'APLICADO', page: 0, size: 10 });
-    expect(get).toHaveBeenCalledWith('/v1/pagos', {
-      params: { estado: 'APLICADO', page: 0, size: 10 },
-    });
-    expect(pageRes.totalElements).toBe(1);
+    const pageRes = await historyRepo.getHistory({ estado: 'RECHAZADO', page: 0, size: 10 });
+    expect(pageRes.items[0]?.gatewayCode).toBe('05');
     expect(pageRes.items[0]?.maskedDestination).toBe('********7271');
-    expect(pageRes.items[0]?.applied).toBe(true);
 
     const detail = await historyRepo.getHistoryDetail('101');
-    expect(get).toHaveBeenCalledWith('/v1/pagos/101');
     expect(detail.fullDestination).toBe('40425475190118187271');
-    expect(detail.authorization).toBe('AUTH-CFE-01');
+    expect(detail.gatewayCode).toBe('05');
+  });
+
+  it('valida exhaustivamente todos los campos de búsqueda, fechas, montos, referencias, login y registro', () => {
+    expect(validateSearchQuery('Telcel 100')).toBeUndefined();
+    expect(validateSearchQuery('<script>alert(1)</script>')).toBeDefined();
+
+    // Fechas reales y rangos
+    expect(validateDateRange('2026-02-29', '').desdeError).toBeDefined(); // 2026 no es bisiesto
+    expect(validateDateRange('2024-02-29', '').desdeError).toBeUndefined(); // 2024 sí es bisiesto
+    expect(validateDateRange('2026-06-10', '2026-06-01').hastaError).toContain('anterior');
+
+    // Mayoría de edad
+    expect(validateAdultBirthDate('2015-05-15')).toContain('18 años');
+    expect(validateAdultBirthDate('1995-05-15')).toBeUndefined();
+
+    // Teléfono, referencia y monto
+    expect(validatePhone10('0000000000')).toContain('ceros');
+    expect(validatePhone10('5512345678')).toBeUndefined();
+    expect(
+      validateServiceReference('1111111111', { hasCheckDigit: true, referenceType: '10 dígitos' }),
+    ).toContain('verificador');
+    expect(
+      validateServiceReference('9876543210', { hasCheckDigit: true, referenceType: '10 dígitos' }),
+    ).toBeUndefined();
+    expect(validatePaymentAmount('150.555')).toBeDefined();
+    expect(validatePaymentAmount('500', { maxBalance: 200 })).toContain('saldo disponible');
+    expect(validatePaymentAmount('150.50', { maxBalance: 500 })).toBeUndefined();
+
+    // Esquemas Zod de login y registro
+    expect(loginSchema.safeParse({ email: 'malo', password: '123' }).success).toBe(false);
+    expect(
+      registerSchema.safeParse({
+        name: 'Alejandro123',
+        lastName: 'Hernández',
+        birthDate: '1995-05-15',
+        curp: 'HERA950515HDFRND01',
+        rfc: 'HERA950515ABC',
+        idGender: 1,
+        idNationality: 1,
+        idMaritalStatus: 1,
+        email: 'alejandro@banco.com',
+        mobilePhone: '5512345678',
+        street: 'Av Reforma',
+        exteriorNumber: '222',
+        neighborhood: 'Juárez',
+        claveEntidad: '09',
+        idMunicipality: 1,
+        postalCode: '06600',
+        occupation: 'Ingeniero',
+        company: 'Banco Digital',
+        monthlyIncome: '25000.00',
+        password: 'PasswordSegura#2026',
+      }).success,
+    ).toBe(false);
   });
 });

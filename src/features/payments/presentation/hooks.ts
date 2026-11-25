@@ -1,10 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Platform } from 'react-native';
 
 import { accountKeys } from '@/features/accounts/presentation/hooks';
-import {
-  confirmPaymentWithFingerprint,
-  confirmPaymentWithPassword,
-} from '@/features/auth/presentation/authActions';
+import { confirmPaymentWithFingerprint } from '@/features/auth/presentation/authActions';
 
 import { paymentsRepository } from '../data/paymentsRepository';
 import type {
@@ -17,14 +15,15 @@ import { payProduct } from '../domain/usecases';
 
 export const paymentKeys = { products: ['payment-products'] as const };
 
-/** Los pagos están soportados tanto en Web como en Android con reautenticación. */
-export const isPaymentsSupported = (): boolean => true;
+/** Los pagos están permitidos exclusivamente en la app móvil con huella digital (nunca en Web). */
+export const isPaymentsSupported = (): boolean => Platform.OS !== 'web';
 
-export function useProducts() {
+export function useProducts(enabled = true) {
   return useQuery({
     queryKey: paymentKeys.products,
     queryFn: () => paymentsRepository.getProducts(),
-    staleTime: 10 * 60 * 1000, // el catálogo se cachea también en Redis en el servidor
+    staleTime: 10 * 60 * 1000,
+    enabled,
   });
 }
 
@@ -59,12 +58,11 @@ export function usePay() {
       payProduct(
         {
           repo: paymentsRepository,
-          confirmWithPassword: confirmPaymentWithPassword,
           confirmWithFingerprint: confirmPaymentWithFingerprint,
         },
         input,
       ),
-    retry: false, // un pago nunca se reintenta automáticamente
+    retry: false,
     onSuccess: async (_receipt, input) => {
       await queryClient.invalidateQueries({ queryKey: accountKeys.customer });
       await queryClient.invalidateQueries({ queryKey: accountKeys.movements(input.accountNumber) });

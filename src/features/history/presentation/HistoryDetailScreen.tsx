@@ -116,6 +116,9 @@ export function HistoryDetailScreen() {
           value={item.fullDestination}
         />
         <Row label="Cuenta de cargo" value={maskAccount(item.accountNumber)} />
+        {item.gatewayCode ? (
+          <Row label="Código respuesta GestoPago" value={item.gatewayCode} />
+        ) : null}
         {item.authorization ? (
           <Row label="Folio de autorización" value={item.authorization} />
         ) : null}
@@ -125,7 +128,7 @@ export function HistoryDetailScreen() {
         {item.upc ? <Row label="Folio UPC" value={item.upc} /> : null}
         <Row label="Fecha y hora" value={formatDateTime(item.createdAt)} />
 
-        {(item.status === 'POR_CONFIRMAR' || item.status === 'PENDIENTE') ? (
+        {item.status === 'POR_CONFIRMAR' || item.status === 'PENDIENTE' ? (
           <Button
             title="Actualizar estado"
             variant="secondary"
@@ -134,10 +137,7 @@ export function HistoryDetailScreen() {
           />
         ) : null}
 
-        <Button
-          title="Volver al historial"
-          onPress={() => router.replace('/(tabs)/history')}
-        />
+        <Button title="Volver al historial" onPress={() => router.replace('/(tabs)/history')} />
       </Card>
     </Screen>
   );
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
   },
   statusPillText: { ...typography.caption, fontWeight: '700' },
-  status: { ...typography.subheading, color: colors.primary, textAlign: 'center' },
+  status: { ...typography.heading, color: colors.text, textAlign: 'center' },
   amount: { ...typography.amount, color: colors.primary },
   message: { ...typography.caption, color: colors.textMuted, textAlign: 'center' },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.xs },
@@ -186,4 +186,3 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 });
-

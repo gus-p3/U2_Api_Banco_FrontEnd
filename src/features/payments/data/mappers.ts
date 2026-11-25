@@ -74,7 +74,7 @@ export const toProduct = (dto: ProductDto): Product => ({
   kind: kindOf(dto),
   category: dto.categoria?.trim() || translateCategory(dto.idCatTipoServicio, dto.tipoFront),
   description: dto.legend?.trim() || undefined,
-  logoUrl: dto.logoUrl?.trim() || buildGestoPagoLogoUrl(dto.idServicio),
+  logoUrl: buildGestoPagoLogoUrl(dto.idServicio),
   price: parsePrice(dto.precio),
   referenceType: dto.tipoReferencia,
   hasCheckDigit: dto.hasDigitoVerificador ?? false,
@@ -148,7 +148,7 @@ export function toReceiptFromDetail(dto: PagoDetalleDto, prev?: PaymentReceipt):
     kind: dto.tipoPago,
     productName: dto.nombreProducto || prev?.productName || '',
     serviceName: dto.nombreServicio || prev?.serviceName || '',
-    logoUrl: dto.logoUrl?.trim() || buildGestoPagoLogoUrl(dto.idServicio) || prev?.logoUrl,
+    logoUrl: buildGestoPagoLogoUrl(dto.idServicio) || prev?.logoUrl,
     destination:
       dto.tipoPago === 'RECARGA'
         ? (dto.telefono ?? dto.destinoEnmascarado ?? prev?.destination ?? '')
