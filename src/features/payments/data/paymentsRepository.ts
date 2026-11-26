@@ -42,10 +42,7 @@ export function createPaymentsRepository(client: AxiosInstance): PaymentsReposit
         referencia: input.reference.trim(),
         monto: input.amount,
       };
-      const { data } = await client.post<ValidateReferenceResponseDto>(
-        '/v1/referencias/validar',
-        body,
-      );
+      const { data } = await client.post<ValidateReferenceResponseDto>('/v1/referencias/validar', body);
       return toReferenceValidationResult(data);
     },
 

@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useContext } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, layout, spacing } from '../theme';
+import { HeaderPresentContext } from './AppHeader';
 
 export interface ScreenProps {
   children: ReactNode;
@@ -25,7 +26,11 @@ export interface ScreenProps {
 /** Contenedor de pantalla: safe area, teclado, scroll opcional y ancho máximo en web. */
 export function Screen({ children, scroll = true, refreshing, onRefresh, contentStyle }: ScreenProps) {
   const insets = useSafeAreaInsets();
-  const padding = { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl };
+  const hasHeader = useContext(HeaderPresentContext);
+  const padding = {
+    paddingTop: (hasHeader ? 0 : insets.top) + spacing.md,
+    paddingBottom: insets.bottom + spacing.xl,
+  };
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

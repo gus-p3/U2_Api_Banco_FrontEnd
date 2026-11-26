@@ -19,7 +19,8 @@ export const errorMessages: Record<ApiErrorCode, string> = {
   PAYMENT_PRODUCT_MISMATCH: 'El producto elegido no corresponde al tipo de pago.',
   REFERENCE_NOT_VALIDATED: 'Debes validar la referencia del servicio antes de realizar el pago.',
   INVALID_SERVICE_REFERENCE: 'La referencia ingresada no es válida para este servicio.',
-  GESTOPAGO_PROVIDER_ERROR: 'El proveedor de servicios no está disponible temporalmente. Intenta más tarde.',
+  GESTOPAGO_PROVIDER_ERROR:
+    'El proveedor de servicios no está disponible temporalmente. Intenta más tarde.',
   INVALID_PAYMENT_REQUEST: 'Revisa los datos del pago e inténtalo de nuevo.',
   INVALID_CREDENTIALS: 'Correo o contraseña incorrectos.',
   BIOMETRIC_AUTH_FAILED: 'No pudimos validar tu huella. Inicia sesión con tu contraseña.',

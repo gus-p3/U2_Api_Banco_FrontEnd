@@ -260,7 +260,7 @@ describe('Flujo de pantallas UI (Login, Catálogo, Bloqueo Web de Pagos, Comprob
 
     receiptStore.set({
       id: 46,
-      message: 'No se puede procesar el pago por el momento, intente más tarde',
+      message: 'El pago no se pudo procesar, intente de nuevo más tarde',
       status: 'RECHAZADO',
       applied: false,
       gatewayCode: '05',
@@ -282,9 +282,7 @@ describe('Flujo de pantallas UI (Login, Catálogo, Bloqueo Web de Pagos, Comprob
 
     expect(screen.getByText('RECHAZADO')).toBeTruthy();
     expect(screen.getByText('05')).toBeTruthy();
-    expect(
-      screen.getByText('No se puede procesar el pago por el momento, intente más tarde'),
-    ).toBeTruthy();
+    expect(screen.getByText('El pago no se pudo procesar, intente de nuevo más tarde')).toBeTruthy();
   });
 
   it('HistoryScreen valida fechas en tiempo real y muestra listado paginado', async () => {

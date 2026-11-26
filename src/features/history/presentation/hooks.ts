@@ -23,4 +23,3 @@ export function usePaymentHistoryDetail(idOrUpc: string) {
     enabled: Boolean(idOrUpc && idOrUpc.trim().length > 0),
   });
 }
-

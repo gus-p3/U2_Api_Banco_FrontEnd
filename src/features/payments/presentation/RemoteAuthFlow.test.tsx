@@ -172,7 +172,9 @@ describe('Flujo E2E Autorización Remota Web -> Android con Huella', () => {
       '5512345678',
     );
     await fireEvent.press(screen.getByRole('button', { name: 'Enviar autorización a mi celular' }));
-    await fireEvent.press(await screen.findByRole('button', { name: 'Enviar notificación a mi Android' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Enviar notificación a mi Android' }),
+    );
 
     expect(requestRemotePaymentAuth).toHaveBeenCalledTimes(1);
     expect(await screen.findByText('Esperando autorización en tu celular')).toBeTruthy();

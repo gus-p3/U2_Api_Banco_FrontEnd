@@ -448,7 +448,8 @@ describe('Casos de uso y repositorios (Auth, Cuentas, Validaciones y Pagos solo 
       .mockResolvedValueOnce({
         data: {
           codigo: 0,
-          mensaje: 'GestoPago rechazó la operación (código 05 - restricción de origen/IP del proveedor: Origen Valido).',
+          mensaje:
+            'GestoPago rechazó la operación (código 05 - restricción de origen/IP del proveedor: Origen Valido).',
           estado: 'RECHAZADO',
           codigoGestoPago: '05',
           upc: 'UPC123457',

@@ -45,7 +45,7 @@ export function AccountsScreen() {
             <ListItem
               key={acc.number}
               icon="wallet-outline"
-              title={`Cuenta ${acc.number} (${maskAccount(acc.number)})`}
+              title={`Cuenta ${maskAccount(acc.number)}`}
               subtitle={`Estatus: ${acc.status}${acc.openedAt ? ` · Apertura ${formatDate(acc.openedAt)}` : ''}`}
               trailing={formatCurrency(acc.balance)}
               onPress={() => router.push(`/account/${acc.number}`)}

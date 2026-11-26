@@ -45,4 +45,3 @@ export interface HistoryRepository {
   getHistory(filters?: PaymentHistoryFilters): Promise<PaymentHistoryPage>;
   getHistoryDetail(idOrUpc: string): Promise<PaymentHistoryItem>;
 }
-

@@ -86,9 +86,7 @@ async function setupMobileNotifications(
     }
 
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as
-        | { autorizacionId?: string }
-        | undefined;
+      const data = response.notification.request.content.data as { autorizacionId?: string } | undefined;
       if (data?.autorizacionId) {
         onTapAuthorization(String(data.autorizacionId));
       }
@@ -150,7 +148,7 @@ export function RemoteAuthListener() {
         const list = await getPendingRemoteAuthorizations();
         if (cancelled) return;
         const target = forceOpenId
-          ? list.find((a) => a.idAutorizacion === forceOpenId) ?? list[0]
+          ? (list.find((a) => a.idAutorizacion === forceOpenId) ?? list[0])
           : list.find((a) => !dismissedIdsRef.current.has(a.idAutorizacion));
 
         if (target) {
@@ -158,9 +156,7 @@ export function RemoteAuthListener() {
             notifiedIdsRef.current.add(target.idAutorizacion);
             void triggerLocalAuthNotification(target);
           }
-          setActiveAuth((prev) =>
-            prev?.idAutorizacion === target.idAutorizacion ? prev : target,
-          );
+          setActiveAuth((prev) => (prev?.idAutorizacion === target.idAutorizacion ? prev : target));
           setErrorMsg(null);
           setStatusFeedback(null);
         } else if (!busy) {
@@ -207,10 +203,7 @@ export function RemoteAuthListener() {
         return;
       }
       const confirmationToken = await confirmPaymentWithFingerprint();
-      const updated = await approveRemoteAuthorization(
-        activeAuth.idAutorizacion,
-        confirmationToken,
-      );
+      const updated = await approveRemoteAuthorization(activeAuth.idAutorizacion, confirmationToken);
       dismissedIdsRef.current.add(activeAuth.idAutorizacion);
       await queryClient.invalidateQueries({ queryKey: accountKeys.customer });
       await queryClient.invalidateQueries({ queryKey: ['payment-history'] });
@@ -273,8 +266,7 @@ export function RemoteAuthListener() {
       <View style={styles.headerBadge}>
         <Ionicons name="finger-print" size={28} color={colors.primary} />
         <Text style={styles.headerText}>
-          Se inició un pago en tu sesión Web. Confírmalo con tu huella digital solo si tú lo
-          solicitaste.
+          Se inició un pago en tu sesión Web. Confírmalo con tu huella digital solo si tú lo solicitaste.
         </Text>
       </View>
 

@@ -57,58 +57,57 @@ export function HomeScreen() {
         <View style={styles.webSecurityBanner}>
           <Ionicons name="finger-print" size={18} color={colors.primary} />
           <Text style={styles.webSecurityText}>
-            Banca Web de consulta: los pagos y recargas están habilitados únicamente en la app móvil
-            con huella digital.
+            Seguridad 2FA activa: los pagos iniciados en Web se autorizan con tu huella digital desde tu
+            celular Android.
           </Text>
         </View>
       ) : null}
 
-      <Card tone="primary" style={styles.balanceCard}>
-        <View style={styles.heroTopRow}>
-          <Text style={styles.balanceLabel}>Saldo disponible</Text>
-          <View style={styles.heroChip}>
-            <Ionicons name="sparkles" size={13} color={colors.textOnPrimary} />
-            <Text style={styles.heroChipText}>ACTIVA</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Ver datos y movimientos de mi cuenta principal"
+        disabled={!primary}
+        style={({ pressed }) => [pressed && { opacity: 0.92 }]}
+        onPress={() => {
+          if (primary) {
+            router.push(`/account/${primary.number}`);
+          }
+        }}
+      >
+        <Card tone="primary" style={styles.balanceCard}>
+          <View style={styles.heroTopRow}>
+            <Text style={styles.balanceLabel}>Saldo disponible</Text>
+            <View style={styles.heroChip}>
+              <Ionicons name="sparkles" size={13} color={colors.textOnPrimary} />
+              <Text style={styles.heroChipText}>{primary?.status ?? 'ACTIVA'}</Text>
+            </View>
           </View>
-        </View>
-        <Text style={styles.balanceValue}>{formatCurrency(total)}</Text>
-        {primary ? (
-          <View style={styles.accountBadgeWrap}>
-            <Text style={styles.accountBadge}>
-              Cuenta principal {maskAccount(primary.number)} · {primary.status}
-            </Text>
-          </View>
-        ) : null}
-      </Card>
+          <Text style={styles.balanceValue}>{formatCurrency(total)}</Text>
+          {primary ? (
+            <View style={styles.heroBottomRow}>
+              <View style={styles.accountBadgeWrap}>
+                <Text style={styles.accountBadge}>Cuenta principal {maskAccount(primary.number)}</Text>
+              </View>
+              <View style={styles.heroLinkRow}>
+                <Text style={styles.heroLinkText}>Ver datos</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.textOnPrimary} />
+              </View>
+            </View>
+          ) : null}
+        </Card>
+      </Pressable>
 
       <View style={styles.quickRow}>
-        {isWeb ? (
-          <>
-            <QuickAction
-              icon="grid-outline"
-              label="Catálogo"
-              onPress={() => router.push('/(tabs)/catalog')}
-            />
-            <QuickAction
-              icon="time-outline"
-              label="Historial"
-              onPress={() => router.push('/(tabs)/history')}
-            />
-          </>
-        ) : (
-          <>
-            <QuickAction
-              icon="phone-portrait-outline"
-              label="Recargas"
-              onPress={() => router.push('/(tabs)/payments?tab=RECARGA')}
-            />
-            <QuickAction
-              icon="receipt-outline"
-              label="Servicios"
-              onPress={() => router.push('/(tabs)/payments?tab=SERVICIO')}
-            />
-          </>
-        )}
+        <QuickAction
+          icon="phone-portrait-outline"
+          label="Recargas"
+          onPress={() => router.push('/(tabs)/payments?tab=RECARGA')}
+        />
+        <QuickAction
+          icon="receipt-outline"
+          label="Servicios"
+          onPress={() => router.push('/(tabs)/payments?tab=SERVICIO')}
+        />
         <QuickAction
           icon="wallet-outline"
           label="Cuentas"
@@ -250,6 +249,23 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   accountBadge: { ...typography.caption, color: colors.textOnPrimary, fontWeight: '600' },
+  heroBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.xs,
+    gap: spacing.sm,
+  },
+  heroLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  heroLinkText: {
+    ...typography.caption,
+    color: colors.textOnPrimary,
+    fontWeight: '700',
+  },
   quickRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
   quickItem: {
     flex: 1,

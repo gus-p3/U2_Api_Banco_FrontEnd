@@ -83,9 +83,7 @@ export function validatePaymentInput(input: PaymentInput): void {
  * con huella digital para emitir el token de un solo uso (header X-Confirmation-Token).
  */
 export async function payProduct(deps: PayDeps, input: PaymentInput): Promise<PaymentReceipt> {
-  const mobileAllowed = deps.isMobilePlatform
-    ? deps.isMobilePlatform()
-    : Platform.OS !== 'web';
+  const mobileAllowed = deps.isMobilePlatform ? deps.isMobilePlatform() : Platform.OS !== 'web';
 
   if (!mobileAllowed) {
     return failWith('UNSUPPORTED_PLATFORM');

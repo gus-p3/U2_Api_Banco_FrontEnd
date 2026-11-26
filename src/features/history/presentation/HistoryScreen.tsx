@@ -8,16 +8,7 @@ import { validateDateRange } from '@/core/validation/validators';
 import type { PaymentStatus } from '@/features/payments/domain/entities';
 import { isPaymentsSupported } from '@/features/payments/presentation/hooks';
 import { colors, radii, spacing, typography } from '@/shared/theme';
-import {
-  Button,
-  Card,
-  EmptyState,
-  ErrorState,
-  Input,
-  Loader,
-  ProviderLogo,
-  Screen,
-} from '@/shared/ui';
+import { Button, Card, EmptyState, ErrorState, Input, Loader, ProviderLogo, Screen } from '@/shared/ui';
 
 import { usePaymentHistory } from './hooks';
 

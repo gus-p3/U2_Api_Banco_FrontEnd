@@ -78,4 +78,3 @@ export function createHistoryRepository(client: AxiosInstance): HistoryRepositor
 }
 
 export const historyRepository = createHistoryRepository(http);
-

@@ -14,16 +14,7 @@ import {
 import { accountKeys, useAccounts } from '@/features/accounts/presentation/hooks';
 import { isBiometricConfirmationAvailable } from '@/features/auth/presentation/authActions';
 import { colors, radii, spacing, typography } from '@/shared/theme';
-import {
-  AppModal,
-  Button,
-  Card,
-  EmptyState,
-  Input,
-  Loader,
-  ProviderLogo,
-  Screen,
-} from '@/shared/ui';
+import { AppModal, Button, Card, EmptyState, Input, Loader, ProviderLogo, Screen } from '@/shared/ui';
 
 import {
   cancelRemoteAuthorization,
@@ -32,12 +23,7 @@ import {
   remoteAuthToReceipt,
   requestRemotePaymentAuth,
 } from '../data/authorizationRepository';
-import type {
-  PaymentInput,
-  PaymentKind,
-  Product,
-  ReferenceValidationResult,
-} from '../domain/entities';
+import type { PaymentInput, PaymentKind, Product, ReferenceValidationResult } from '../domain/entities';
 import {
   isWebRemoteAuthMode,
   receiptStore,
@@ -98,8 +84,7 @@ export function PaymentCheckoutScreen() {
       : '',
   );
   const [amountTouched, setAmountTouched] = useState(false);
-  const [referenceValidation, setReferenceValidation] =
-    useState<ReferenceValidationResult | null>(null);
+  const [referenceValidation, setReferenceValidation] = useState<ReferenceValidationResult | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
@@ -181,8 +166,7 @@ export function PaymentCheckoutScreen() {
     [accounts, selectedAccount],
   );
 
-  const effectiveAmount =
-    kind === 'RECARGA' ? (selectedProduct?.price ?? 0) : Number(amount) || 0;
+  const effectiveAmount = kind === 'RECARGA' ? (selectedProduct?.price ?? 0) : Number(amount) || 0;
 
   const accountError = useMemo(() => {
     if (!selectedAccount) return 'Selecciona una cuenta de cargo.';
@@ -190,11 +174,7 @@ export function PaymentCheckoutScreen() {
     if (selectedAccountObj && selectedAccountObj.status !== 'ACTIVA') {
       return 'La cuenta seleccionada se encuentra inactiva para realizar pagos.';
     }
-    if (
-      selectedAccountObj &&
-      effectiveAmount > 0 &&
-      selectedAccountObj.balance < effectiveAmount
-    ) {
+    if (selectedAccountObj && effectiveAmount > 0 && selectedAccountObj.balance < effectiveAmount) {
       return `Saldo insuficiente en la cuenta (${formatCurrency(selectedAccountObj.balance)} disponible).`;
     }
     return undefined;
@@ -379,26 +359,16 @@ export function PaymentCheckoutScreen() {
 
   return (
     <Screen>
-      <Pressable
-        accessibilityRole="button"
-        style={styles.backRow}
-        onPress={() => router.back()}
-      >
+      <Pressable accessibilityRole="button" style={styles.backRow} onPress={() => router.back()}>
         <Ionicons name="arrow-back" size={20} color={colors.primary} />
         <Text style={styles.backText}>Cambiar servicio o producto</Text>
       </Pressable>
 
-      <Text style={styles.title}>
-        {kind === 'RECARGA' ? 'Completar recarga' : 'Pagar servicio'}
-      </Text>
+      <Text style={styles.title}>{kind === 'RECARGA' ? 'Completar recarga' : 'Pagar servicio'}</Text>
 
       <Card style={styles.productBanner}>
         <View style={styles.summaryHeader}>
-          <ProviderLogo
-            name={selectedProduct.serviceName}
-            logoUrl={selectedProduct.logoUrl}
-            size={48}
-          />
+          <ProviderLogo name={selectedProduct.serviceName} logoUrl={selectedProduct.logoUrl} size={48} />
           <View style={styles.summaryHeaderTexts}>
             <Text style={styles.summaryService}>{selectedProduct.serviceName}</Text>
             <Text style={styles.summaryProduct}>{selectedProduct.name}</Text>
@@ -504,9 +474,7 @@ export function PaymentCheckoutScreen() {
                   : 'Validar referencia'
               }
               variant="secondary"
-              disabled={
-                Boolean(referenceError) || (amount.trim().length > 0 && Boolean(amountError))
-              }
+              disabled={Boolean(referenceError) || (amount.trim().length > 0 && Boolean(amountError))}
               loading={validateRefMutation.isPending}
               onPress={() => void handleValidateReference()}
             />
@@ -515,16 +483,12 @@ export function PaymentCheckoutScreen() {
               <View
                 style={[
                   styles.validationBox,
-                  referenceValidation.valid
-                    ? styles.validationBoxSuccess
-                    : styles.validationBoxError,
+                  referenceValidation.valid ? styles.validationBoxSuccess : styles.validationBoxError,
                 ]}
                 accessibilityRole="summary"
               >
                 <Text style={styles.validationTitle}>
-                  {referenceValidation.valid
-                    ? 'Referencia válida en GestoPago'
-                    : 'Referencia inválida'}
+                  {referenceValidation.valid ? 'Referencia válida en GestoPago' : 'Referencia inválida'}
                 </Text>
                 <Text style={styles.validationText}>{referenceValidation.message}</Text>
                 {referenceValidation.valid ? (
@@ -558,8 +522,8 @@ export function PaymentCheckoutScreen() {
                 Autorización en 2 pasos con tu celular Android
               </Text>
               <Text style={styles.biometricNoticeBody}>
-                Al continuar enviaremos una notificación a tu teléfono para que apruebes el pago con
-                tu huella digital.
+                Al continuar enviaremos una notificación a tu teléfono para que apruebes el pago con tu
+                huella digital.
               </Text>
             </View>
           </View>
@@ -582,9 +546,7 @@ export function PaymentCheckoutScreen() {
         ) : null}
 
         <Button
-          title={
-            isWebRemote ? 'Enviar autorización a mi celular' : 'Continuar y autorizar con huella'
-          }
+          title={isWebRemote ? 'Enviar autorización a mi celular' : 'Continuar y autorizar con huella'}
           disabled={!canContinue}
           loading={payMutation.isPending || remoteRequesting}
           onPress={() => void handlePrepareConfirm()}

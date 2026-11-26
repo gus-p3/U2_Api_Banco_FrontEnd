@@ -40,9 +40,7 @@ export async function enableBiometrics(
   params: { idClient: number; email: string },
 ): Promise<void> {
   if (!(await deps.biometrics.isAvailable())) return fail('BIOMETRIC_UNAVAILABLE');
-  const ok = await deps.biometrics.authenticate(
-    'Confirma tu huella para activar el acceso biométrico',
-  );
+  const ok = await deps.biometrics.authenticate('Confirma tu huella para activar el acceso biométrico');
   if (!ok) return fail('BIOMETRIC_CANCELLED');
   const secret = await deps.biometrics.generateSecret();
   await deps.repo.enrollBiometric(params.idClient, BIOMETRIC_TYPE, secret);

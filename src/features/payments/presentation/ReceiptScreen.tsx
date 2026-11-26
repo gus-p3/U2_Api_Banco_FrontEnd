@@ -104,7 +104,11 @@ export function ReceiptScreen() {
           </View>
           <Text style={styles.status}>{ui.title}</Text>
           <Text style={styles.amount}>{formatCurrency(receipt.amount)}</Text>
-          <Text style={styles.message}>{receipt.message}</Text>
+          <Text style={styles.message}>
+            {receipt.status === 'RECHAZADO'
+              ? 'El pago no se pudo procesar, intente de nuevo más tarde'
+              : receipt.message}
+          </Text>
         </View>
 
         {ui.isPending ? (
@@ -113,17 +117,6 @@ export function ReceiptScreen() {
             <Text style={styles.pendingAlertText}>
               El proveedor GestoPago está procesando la confirmación de esta transacción. Puedes
               actualizar el estado desde aquí usando tu folio UPC.
-            </Text>
-          </View>
-        ) : null}
-
-        {receipt.status === 'RECHAZADO' ? (
-          <View style={styles.rejectedAlert} accessibilityRole="alert">
-            <Text style={styles.rejectedAlertTitle}>Transacción no aplicada</Text>
-            <Text style={styles.rejectedAlertText}>
-              {receipt.gatewayCode === '05'
-                ? 'No se puede procesar el pago por el momento, intente más tarde. El importe fue devuelto íntegramente a tu cuenta.'
-                : 'El pago fue rechazado por el proveedor y el importe fue devuelto a tu cuenta.'}
             </Text>
           </View>
         ) : null}

@@ -116,12 +116,8 @@ export function HistoryDetailScreen() {
           value={item.fullDestination}
         />
         <Row label="Cuenta de cargo" value={maskAccount(item.accountNumber)} />
-        {item.gatewayCode ? (
-          <Row label="Código respuesta GestoPago" value={item.gatewayCode} />
-        ) : null}
-        {item.authorization ? (
-          <Row label="Folio de autorización" value={item.authorization} />
-        ) : null}
+        {item.gatewayCode ? <Row label="Código respuesta GestoPago" value={item.gatewayCode} /> : null}
+        {item.authorization ? <Row label="Folio de autorización" value={item.authorization} /> : null}
         {item.transactionId ? (
           <Row label="ID Transacción (idTx)" value={String(item.transactionId)} />
         ) : null}
