@@ -19,7 +19,7 @@ import {
 } from '@/shared/ui';
 
 import type { Product } from '../domain/entities';
-import { isPaymentsSupported, useProducts } from './hooks';
+import { isPaymentsSupported, selectedProductStore, useProducts } from './hooks';
 
 const PAGE_SIZE = 20;
 
@@ -71,8 +71,9 @@ export function CatalogScreen() {
 
   const handleSelectProduct = (product: Product) => {
     if (!paymentsAllowed) return;
+    selectedProductStore.set(product);
     router.push({
-      pathname: '/(tabs)/payments',
+      pathname: '/payment/checkout',
       params: {
         tab: product.kind === 'RECARGA' ? 'RECARGA' : 'SERVICIO',
         productId: String(product.idProducto),

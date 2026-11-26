@@ -5,6 +5,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { AppProviders, queryClient } from '@/core/app/providers';
 import { useSessionStore } from '@/features/auth/presentation/sessionStore';
+import { RemoteAuthListener } from '@/features/payments/presentation/RemoteAuthListener';
 import { colors } from '@/shared/theme';
 import { Loader } from '@/shared/ui';
 
@@ -43,6 +44,7 @@ export default function RootLayout() {
     <AppProviders>
       <StatusBar style="dark" />
       <NavigationGuard />
+      <RemoteAuthListener />
     </AppProviders>
   );
 }

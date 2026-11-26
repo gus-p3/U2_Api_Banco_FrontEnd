@@ -171,7 +171,7 @@ describe('Flujo de pantallas UI (Login, Catálogo, Bloqueo Web de Pagos, Comprob
     expect(screen.getByText('Banco Digital')).toBeTruthy();
     const emailInput = screen.getByLabelText('Correo electrónico');
     await fireEvent.changeText(emailInput, 'correo-invalido');
-    expect(await screen.findByText('Ingresa un correo electrónico con formato válido')).toBeTruthy();
+    expect(await screen.findByText('El formato del correo electrónico es inválido')).toBeTruthy();
 
     const demoBtn = screen.getByRole('button', { name: 'Usar credenciales demo' });
     await fireEvent.press(demoBtn);
@@ -182,7 +182,7 @@ describe('Flujo de pantallas UI (Login, Catálogo, Bloqueo Web de Pagos, Comprob
     expect(screen.getByLabelText('Contraseña').props.value).toBe('PasswordSegura#2026');
   });
 
-  it('renderiza CatalogScreen en móvil con navegación a pagos y en Web bloquea los botones de pago', async () => {
+  it('renderiza CatalogScreen en móvil y en Web permitiendo iniciar el flujo de pagos', async () => {
     Platform.OS = 'android';
     const { unmount } = await render(
       <Wrapper>
@@ -195,7 +195,7 @@ describe('Flujo de pantallas UI (Login, Catálogo, Bloqueo Web de Pagos, Comprob
     await fireEvent.press(payServiceBtn);
 
     expect(mockPush).toHaveBeenCalledWith({
-      pathname: '/(tabs)/payments',
+      pathname: '/payment/checkout',
       params: { tab: 'SERVICIO', productId: '209', serviceId: '79' },
     });
     await unmount();
@@ -208,13 +208,10 @@ describe('Flujo de pantallas UI (Login, Catálogo, Bloqueo Web de Pagos, Comprob
     );
 
     expect(await screen.findByText('Telcel 100')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Pagar este servicio' })).toBeNull();
-    expect(
-      screen.getAllByText('Pago exclusivo en app móvil con huella digital').length,
-    ).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Pagar este servicio' })).toBeTruthy();
   });
 
-  it('PaymentsScreen en Web bloquea pagos por completo y muestra aviso de uso exclusivo en móvil con huella', async () => {
+  it('PaymentsScreen navega a la pantalla dedicada de checkout al seleccionar un servicio', async () => {
     Platform.OS = 'web';
     await render(
       <Wrapper>
@@ -222,10 +219,13 @@ describe('Flujo de pantallas UI (Login, Catálogo, Bloqueo Web de Pagos, Comprob
       </Wrapper>,
     );
 
-    expect(
-      screen.getByText('Pagos exclusivos en la aplicación móvil con huella digital'),
-    ).toBeTruthy();
-    expect(screen.queryByLabelText('Buscar compañía o producto')).toBeNull();
+    expect(await screen.findByText('Telcel · Telcel 100')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Telcel · Telcel 100'));
+
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/payment/checkout',
+      params: { tab: 'RECARGA', productId: '582', serviceId: '133' },
+    });
   });
 
   it('ReceiptScreen muestra POR_CONFIRMAR, APLICADO y maneja el rechazo con código 05 de GestoPago', async () => {

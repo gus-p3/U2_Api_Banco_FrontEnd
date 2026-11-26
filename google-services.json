@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "104728913697",
+    "project_id": "bancoapp-c6d2b",
+    "storage_bucket": "bancoapp-c6d2b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:104728913697:android:65a983d2c9cecc70acc060",
+        "android_client_info": {
+          "package_name": "com.intrumentoev.bancodigital"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDcjjAG2f5jsxljZ4e2AlGH3wxuAVlkKME"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

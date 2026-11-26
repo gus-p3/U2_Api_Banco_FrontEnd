@@ -74,18 +74,18 @@ export function validateDateRange(
 
 export function validateAdultBirthDate(value: string): string | undefined {
   const clean = value.trim();
-  if (!clean) return 'La fecha de nacimiento es obligatoria.';
+  if (!clean) return 'La fecha de nacimiento es obligatoria';
   if (!ISO_DATE_REGEX.test(clean)) {
-    return 'Usa el formato AAAA-MM-DD (ej. 1995-05-15).';
+    return 'La fecha de nacimiento debe tener formato válido (YYYY-MM-DD)';
   }
   const birth = parseValidCalendarDate(clean);
   if (!birth) {
-    return 'Ingresa una fecha de nacimiento válida en el calendario.';
+    return 'La fecha de nacimiento debe tener formato válido (YYYY-MM-DD)';
   }
   const now = new Date();
   const todayUtc = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
   if (birth.getTime() >= todayUtc.getTime()) {
-    return 'La fecha de nacimiento debe ser en el pasado.';
+    return 'La fecha de nacimiento debe ser en el pasado';
   }
   let age = todayUtc.getUTCFullYear() - birth.getUTCFullYear();
   const monthDiff = todayUtc.getUTCMonth() - birth.getUTCMonth();
@@ -93,7 +93,7 @@ export function validateAdultBirthDate(value: string): string | undefined {
     age -= 1;
   }
   if (age < 18) {
-    return 'Debes tener al menos 18 años cumplidos para abrir una cuenta.';
+    return `El cliente debe ser mayor de edad (al menos 18 años). Edad actual: ${age} años`;
   }
   if (age > 120) {
     return 'Verifica el año de nacimiento ingresado.';

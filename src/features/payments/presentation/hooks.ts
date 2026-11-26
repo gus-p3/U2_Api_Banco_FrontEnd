@@ -8,6 +8,7 @@ import { paymentsRepository } from '../data/paymentsRepository';
 import type {
   PaymentInput,
   PaymentReceipt,
+  Product,
   ReferenceValidationInput,
   ReferenceValidationResult,
 } from '../domain/entities';
@@ -15,8 +16,11 @@ import { payProduct } from '../domain/usecases';
 
 export const paymentKeys = { products: ['payment-products'] as const };
 
-/** Los pagos están permitidos exclusivamente en la app móvil con huella digital (nunca en Web). */
-export const isPaymentsSupported = (): boolean => Platform.OS !== 'web';
+/** Los pagos funcionan en móvil (huella local) y en Web (autorización remota con huella en Android). */
+export const isPaymentsSupported = (): boolean => true;
+
+/** En Web el pago se solicita y espera confirmación biométrica con huella en el celular Android. */
+export const isWebRemoteAuthMode = (): boolean => Platform.OS === 'web';
 
 export function useProducts(enabled = true) {
   return useQuery({
@@ -80,5 +84,17 @@ export const receiptStore = {
   get: () => lastReceipt,
   clear: () => {
     lastReceipt = null;
+  },
+};
+
+/** Producto seleccionado para llenar el formulario en la pantalla dedicada de checkout. */
+let selectedProductCache: Product | null = null;
+export const selectedProductStore = {
+  set: (p: Product) => {
+    selectedProductCache = p;
+  },
+  get: () => selectedProductCache,
+  clear: () => {
+    selectedProductCache = null;
   },
 };

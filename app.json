@@ -9,6 +9,7 @@
     "userInterfaceStyle": "light",
     "android": {
       "package": "com.intrumentoev.bancodigital",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#0B1F4B",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -25,7 +26,8 @@
       "expo-secure-store",
       "expo-splash-screen",
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      "expo-notifications"
     ]
   }
 }
