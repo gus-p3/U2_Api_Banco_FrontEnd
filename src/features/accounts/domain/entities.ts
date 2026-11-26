@@ -26,12 +26,19 @@ export interface Customer {
   firstName: string;
   email?: string;
   mobilePhone?: string;
+  alternativePhone?: string;
   curp: string;
   rfc?: string;
   isActive: boolean;
   accounts: Account[];
   primaryAccount?: Account;
   address?: string;
+  street?: string;
+  exteriorNumber?: string;
+  interiorNumber?: string;
+  neighborhood?: string;
+  postalCode?: string;
   occupation?: string;
   company?: string;
+  monthlyIncome?: number;
 }

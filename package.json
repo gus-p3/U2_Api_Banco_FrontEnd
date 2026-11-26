@@ -45,7 +45,7 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
+    "android": "expo run:android",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "prettier --check \"src/**/*.{ts,tsx}\"",

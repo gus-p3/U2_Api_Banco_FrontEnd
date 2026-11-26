@@ -89,9 +89,7 @@ export function AccountDetailScreen() {
               size={15}
               color={colors.textOnPrimary}
             />
-            <Text style={styles.revealPillText}>
-              {revealed ? 'Ocultar' : 'Ver datos completos'}
-            </Text>
+            <Text style={styles.revealPillText}>{revealed ? 'Ocultar' : 'Ver datos completos'}</Text>
           </Pressable>
         </View>
         <Text style={styles.balance}>{account ? formatCurrency(account.balance) : '—'}</Text>
