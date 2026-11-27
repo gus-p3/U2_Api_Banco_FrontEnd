@@ -3,7 +3,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, StyleSheet, Text, View } from 'react-native';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const appLogo = require('../../../../assets/icon.png');
 
 import { toAppError } from '@/core/errors/toAppError';
 import { colors, radii, shadows, spacing, typography } from '@/shared/theme';
@@ -365,8 +368,8 @@ export function LoginScreen() {
   return (
     <Screen>
       <View style={styles.brand}>
-        <View style={styles.badge}>
-          <Ionicons name="sparkles" size={28} color={colors.textOnPrimary} />
+        <View style={styles.logoWrap}>
+          <Image source={appLogo} style={styles.logoImage} resizeMode="cover" />
         </View>
         <View style={styles.pillTag}>
           <Text style={styles.pillTagText}>FINTECH DIGITAL</Text>
@@ -457,6 +460,18 @@ export function LoginScreen() {
 
 const styles = StyleSheet.create({
   brand: { alignItems: 'center', gap: spacing.xs, marginTop: spacing.xl },
+  logoWrap: {
+    width: 88,
+    height: 88,
+    borderRadius: radii.xl,
+    marginBottom: spacing.xs,
+    ...shadows.hero,
+  },
+  logoImage: {
+    width: 88,
+    height: 88,
+    borderRadius: radii.xl,
+  },
   badge: {
     width: 64,
     height: 64,

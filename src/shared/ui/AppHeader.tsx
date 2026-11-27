@@ -1,13 +1,15 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { createContext } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { initials } from '@/core/utils/format';
 import { useCustomer } from '@/features/accounts/presentation/hooks';
 import { useSessionStore } from '@/features/auth/presentation/sessionStore';
 import { colors, layout, radii, spacing, typography } from '@/shared/theme';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const appLogo = require('../../../assets/icon.png');
 
 /** Indica a `<Screen />` que la cabecera ya aplicó el safe-area superior para evitar doble espacio. */
 export const HeaderPresentContext = createContext(false);
@@ -33,9 +35,7 @@ export function AppHeader({ sectionTitle }: AppHeaderProps) {
           style={styles.brandRow}
           onPress={() => router.push('/(tabs)')}
         >
-          <View style={styles.logoBadge}>
-            <Ionicons name="shield-checkmark" size={18} color={colors.textOnPrimary} />
-          </View>
+          <Image source={appLogo} style={styles.logoImage} resizeMode="cover" />
           <View>
             <Text style={styles.brandName}>Banco Digital</Text>
             {sectionTitle ? <Text style={styles.sectionSubtitle}>{sectionTitle}</Text> : null}
@@ -77,13 +77,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  logoBadge: {
-    width: 34,
-    height: 34,
+  logoImage: {
+    width: 38,
+    height: 38,
     borderRadius: radii.md,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   brandName: {
     ...typography.subheading,
