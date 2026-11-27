@@ -2,7 +2,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { AppProviders, queryClient } from '@/core/app/providers';
 import { useSessionStore } from '@/features/auth/presentation/sessionStore';
@@ -19,6 +19,39 @@ function NavigationGuard() {
 
   useEffect(() => {
     void SplashScreen.hideAsync().catch(() => undefined);
+  }, []);
+
+  // En Web, si Railway despliega una nueva versión con hashes JS distintos mientras hay una pestaña abierta,
+  // recarga automáticamente una vez para evitar pantalla en blanco por chunk desactualizado.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const handleChunkError = (msg: string) => {
+      if (
+        !/ChunkLoadError|Loading chunk|Unexpected token '<'|Failed to fetch dynamically imported module/i.test(
+          msg,
+        )
+      ) {
+        return;
+      }
+      try {
+        const key = 'banco_chunk_reload_at';
+        const last = Number(window.sessionStorage.getItem(key) ?? '0');
+        if (Date.now() - last > 30_000) {
+          window.sessionStorage.setItem(key, String(Date.now()));
+          window.location.reload();
+        }
+      } catch {
+        window.location.reload();
+      }
+    };
+    const onError = (e: ErrorEvent) => handleChunkError(e.message || String(e.error ?? ''));
+    const onRejection = (e: PromiseRejectionEvent) => handleChunkError(String(e.reason ?? ''));
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onRejection);
+    };
   }, []);
 
   useEffect(() => {

@@ -161,7 +161,7 @@ describe('Flujo de pantallas UI (Login, Catálogo, Bloqueo Web de Pagos, Comprob
     Platform.OS = originalOS;
   });
 
-  it('renderiza LoginScreen, valida en tiempo real y autocompleta credenciales demo', async () => {
+  it('renderiza LoginScreen, valida en tiempo real y no expone botón de credenciales demo', async () => {
     await render(
       <Wrapper>
         <LoginScreen />
@@ -173,13 +173,7 @@ describe('Flujo de pantallas UI (Login, Catálogo, Bloqueo Web de Pagos, Comprob
     await fireEvent.changeText(emailInput, 'correo-invalido');
     expect(await screen.findByText('El formato del correo electrónico es inválido')).toBeTruthy();
 
-    const demoBtn = screen.getByRole('button', { name: 'Usar credenciales demo' });
-    await fireEvent.press(demoBtn);
-
-    expect(screen.getByLabelText('Correo electrónico').props.value).toBe(
-      'alejandro.hernandez@banco-demo.com',
-    );
-    expect(screen.getByLabelText('Contraseña').props.value).toBe('PasswordSegura#2026');
+    expect(screen.queryByRole('button', { name: 'Usar credenciales demo' })).toBeNull();
   });
 
   it('renderiza CatalogScreen en móvil y en Web permitiendo iniciar el flujo de pagos', async () => {

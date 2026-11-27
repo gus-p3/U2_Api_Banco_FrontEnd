@@ -221,11 +221,6 @@ export function LoginScreen() {
     }
   };
 
-  const fillDemo = () => {
-    setValue('email', 'alejandro.hernandez@banco-demo.com', { shouldValidate: true });
-    setValue('password', 'PasswordSegura#2026', { shouldValidate: true });
-  };
-
   const otpLiveError =
     otpTouched && otpCode.length > 0 && otpCode.length < 6
       ? 'El código debe tener exactamente 6 dígitos numéricos.'
@@ -445,8 +440,6 @@ export function LoginScreen() {
             onPress={() => void onBiometricPress()}
           />
         ) : null}
-
-        <Button title="Usar credenciales demo" variant="ghost" onPress={fillDemo} />
       </Card>
 
       <Button
