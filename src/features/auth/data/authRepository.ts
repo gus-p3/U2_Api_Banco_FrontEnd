@@ -2,15 +2,19 @@ import type { AxiosInstance } from 'axios';
 
 import type { AuthRepository } from '../domain/ports';
 import type {
+  AuthChallengeStatusDto,
   AuthRequestDto,
   AuthResponseDto,
   BiometricLoginRequestDto,
   BiometricRegisterRequestDto,
+  ChallengeActionRequestDto,
   OperationConfirmRequestDto,
   OperationConfirmResponseDto,
+  PendingLogin2faDto,
   RefreshTokenRequestDto,
+  VerifyCodeRequestDto,
 } from './dto';
-import { toAuthResult } from './mappers';
+import { toAuthResult, toLoginOutcome } from './mappers';
 
 /** Implementación HTTP del repositorio de autenticación. Recibe el cliente por inyección (testeable). */
 export function createAuthRepository(client: AxiosInstance): AuthRepository {
@@ -19,6 +23,73 @@ export function createAuthRepository(client: AxiosInstance): AuthRepository {
       const body: AuthRequestDto = { email, password };
       const { data } = await client.post<AuthResponseDto>('/v1/auth/login', body, { skipAuth: true });
       return toAuthResult(data);
+    },
+
+    async loginChannel(email, password, channel) {
+      const body: AuthRequestDto = { email, password, channel };
+      const { data } = await client.post<AuthResponseDto>('/v1/auth/login', body, { skipAuth: true });
+      return toLoginOutcome(data);
+    },
+
+    async verifyChallengeCode(challengeId, pollToken, code) {
+      const body: VerifyCodeRequestDto = { challengeId, pollToken, code };
+      const { data } = await client.post<AuthResponseDto>('/v1/auth/verificar-codigo', body, {
+        skipAuth: true,
+      });
+      return toAuthResult(data);
+    },
+
+    async sendChallengeCode(challengeId, pollToken) {
+      const body: ChallengeActionRequestDto = { challengeId, pollToken };
+      const { data } = await client.post<AuthChallengeStatusDto>('/v1/auth/2fa/enviar-codigo', body, {
+        skipAuth: true,
+      });
+      return data;
+    },
+
+    async requestChallengeBiometric(challengeId, pollToken) {
+      const body: ChallengeActionRequestDto = { challengeId, pollToken };
+      const { data } = await client.post<AuthChallengeStatusDto>('/v1/auth/2fa/solicitar-huella', body, {
+        skipAuth: true,
+      });
+      return data;
+    },
+
+    async getChallengeStatus(challengeId, pollToken) {
+      const body: ChallengeActionRequestDto = { challengeId, pollToken };
+      const { data } = await client.post<AuthChallengeStatusDto>('/v1/auth/2fa/estado', body, {
+        skipAuth: true,
+      });
+      return data;
+    },
+
+    async cancelChallenge(challengeId, pollToken) {
+      const body: ChallengeActionRequestDto = { challengeId, pollToken };
+      const { data } = await client.post<AuthChallengeStatusDto>('/v1/auth/2fa/cancelar', body, {
+        skipAuth: true,
+      });
+      return data;
+    },
+
+    async getPendingLogin2fa() {
+      const { data } = await client.get<PendingLogin2faDto[]>('/v1/auth/2fa/pendientes');
+      return Array.isArray(data) ? data : [];
+    },
+
+    async approveLogin2fa(challengeId, confirmationToken) {
+      const { data } = await client.post<PendingLogin2faDto>(
+        `/v1/auth/2fa/${encodeURIComponent(challengeId)}/aprobar`,
+        {},
+        { headers: { 'X-Confirmation-Token': confirmationToken } },
+      );
+      return data;
+    },
+
+    async rejectLogin2fa(challengeId) {
+      const { data } = await client.post<PendingLogin2faDto>(
+        `/v1/auth/2fa/${encodeURIComponent(challengeId)}/rechazar`,
+      );
+      return data;
     },
 
     async loginBiometric(email, biometricType, secret) {

@@ -1,12 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors } from '@/shared/theme';
 import { AppHeader, HeaderPresentContext } from '@/shared/ui/AppHeader';
 
 export default function TabsLayout() {
   const isWeb = Platform.OS === 'web';
+  const insets = useSafeAreaInsets();
+  const bottomInset = isWeb ? 0 : insets.bottom;
 
   return (
     <HeaderPresentContext.Provider value={true}>
@@ -27,8 +30,9 @@ export default function TabsLayout() {
             backgroundColor: colors.surface,
             borderTopColor: colors.border,
             borderTopWidth: 1,
-            height: isWeb ? 64 : 60,
+            height: (isWeb ? 64 : 60) + bottomInset,
             paddingTop: 6,
+            paddingBottom: bottomInset,
           },
         }}
       >

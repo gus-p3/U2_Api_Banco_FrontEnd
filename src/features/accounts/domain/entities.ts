@@ -29,6 +29,12 @@ export interface Customer {
   alternativePhone?: string;
   curp: string;
   rfc?: string;
+  genderId?: number;
+  genderName?: string;
+  nationalityId?: number;
+  nationalityName?: string;
+  maritalStatusId?: number;
+  maritalStatusName?: string;
   isActive: boolean;
   accounts: Account[];
   primaryAccount?: Account;
@@ -37,6 +43,11 @@ export interface Customer {
   exteriorNumber?: string;
   interiorNumber?: string;
   neighborhood?: string;
+  municipalityId?: number;
+  municipalityName?: string;
+  stateId?: number;
+  stateCode?: string;
+  stateName?: string;
   postalCode?: string;
   occupation?: string;
   company?: string;

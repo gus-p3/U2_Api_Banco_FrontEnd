@@ -21,7 +21,10 @@ import {
 import { colors, radii, spacing, typography } from '@/shared/theme';
 import { BirthDatePickerField, Button, Card, Input, Screen, SelectField } from '@/shared/ui';
 
-import { signInWithPassword } from './authActions';
+import { toAuthChallenge } from '../data/mappers';
+import type { AuthResponseDto } from '../data/dto';
+import type { AuthChallenge } from '../domain/entities';
+import { send2faEmailCode, signInWithPasswordChallenge, verifyEmailOrLoginCode } from './authActions';
 import { type RegisterFormValues, registerSchema } from './registerSchema';
 
 const STEPS: Array<{
@@ -55,6 +58,12 @@ export function RegisterScreen() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [verificationChallenge, setVerificationChallenge] = useState<AuthChallenge | null>(null);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [codeTouched, setCodeTouched] = useState(false);
+  const [verifyingCode, setVerifyingCode] = useState(false);
+  const [resendingCode, setResendingCode] = useState(false);
+  const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
 
   const genders = useGenders();
   const nationalities = useNationalities();
@@ -183,12 +192,127 @@ export function RegisterScreen() {
         initialBalance: 1000,
         password: v.password,
       };
-      await http.post('/v1/clientes', body, { skipAuth: true });
-      await signInWithPassword(v.email.trim(), v.password);
+      const { data } = await http.post<{ auth?: AuthResponseDto }>('/v1/clientes', body, {
+        skipAuth: true,
+      });
+      const challenge = data?.auth ? toAuthChallenge(data.auth) : null;
+      if (challenge) {
+        setVerificationChallenge(challenge);
+        setVerificationCode('');
+        setCodeTouched(false);
+        setVerificationNotice(
+          `Enviamos un código de 6 dígitos a ${challenge.email} para verificar tu cuenta creada.`,
+        );
+        return;
+      }
+      const outcome = await signInWithPasswordChallenge(v.email.trim(), v.password);
+      if (outcome.kind === 'challenge') {
+        setVerificationChallenge(outcome.challenge);
+        setVerificationCode('');
+        setCodeTouched(false);
+      }
     } catch (e) {
       setServerError(toAppError(e).message);
     }
   };
+
+  const handleVerifyAccountCode = async () => {
+    if (!verificationChallenge) return;
+    setCodeTouched(true);
+    if (!/^[0-9]{6}$/.test(verificationCode.trim())) {
+      setServerError('Introduce los 6 dígitos del código enviado a tu correo.');
+      return;
+    }
+    setServerError(null);
+    setVerifyingCode(true);
+    try {
+      await verifyEmailOrLoginCode(
+        verificationChallenge.challengeId,
+        verificationChallenge.pollToken,
+        verificationCode,
+      );
+    } catch (e) {
+      setServerError(toAppError(e).message);
+    } finally {
+      setVerifyingCode(false);
+    }
+  };
+
+  const handleResendAccountCode = async () => {
+    if (!verificationChallenge) return;
+    setServerError(null);
+    setResendingCode(true);
+    try {
+      await send2faEmailCode(verificationChallenge.challengeId, verificationChallenge.pollToken);
+      setVerificationNotice(`Reenviamos un nuevo código de 6 dígitos a ${verificationChallenge.email}.`);
+    } catch (e) {
+      setServerError(toAppError(e).message);
+    } finally {
+      setResendingCode(false);
+    }
+  };
+
+  if (verificationChallenge) {
+    const codeError =
+      codeTouched && verificationCode.length > 0 && verificationCode.length < 6
+        ? 'El código debe tener exactamente 6 dígitos numéricos.'
+        : undefined;
+    return (
+      <Screen>
+        <Text style={styles.title}>Verifica tu cuenta</Text>
+        <Text style={styles.stepCounter}>Cuenta creada · Verificación por correo</Text>
+
+        <Card style={styles.card}>
+          <Text style={styles.section}>Introduce tu código de verificación</Text>
+          <Text style={styles.subtitle}>
+            Para verificar tu cuenta creada ({verificationChallenge.email}), introduce el código de 6
+            dígitos que se envió a tu correo electrónico.
+          </Text>
+
+          <Input
+            label="Código de verificación (6 dígitos)"
+            placeholder="000000"
+            keyboardType="number-pad"
+            maxLength={6}
+            value={verificationCode}
+            onBlur={() => setCodeTouched(true)}
+            onChangeText={(txt) => {
+              setVerificationCode(txt.replace(/[^0-9]/g, ''));
+              setCodeTouched(true);
+              setServerError(null);
+            }}
+            error={codeError}
+          />
+
+          {verificationNotice ? <Text style={styles.matchText}>{verificationNotice}</Text> : null}
+
+          {serverError ? (
+            <Text accessibilityRole="alert" style={styles.serverError}>
+              {serverError}
+            </Text>
+          ) : null}
+
+          <Button
+            title="Verificar cuenta y entrar"
+            loading={verifyingCode}
+            onPress={() => void handleVerifyAccountCode()}
+          />
+          <Button
+            title="Reenviar código"
+            variant="outline"
+            loading={resendingCode}
+            onPress={() => void handleResendAccountCode()}
+          />
+        </Card>
+
+        <Button
+          title="Ir a iniciar sesión"
+          variant="ghost"
+          onPress={() => router.replace('/(auth)/login')}
+        />
+      </Screen>
+    );
+  }
 
   const progressPct = ((step + 1) / STEPS.length) * 100;
 

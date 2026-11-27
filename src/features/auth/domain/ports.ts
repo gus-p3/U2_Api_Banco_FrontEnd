@@ -1,8 +1,18 @@
-import type { AuthResult, BiometricType } from './entities';
+import type { AuthChallengeStatusDto, PendingLogin2faDto } from '../data/dto';
+import type { AuthResult, BiometricType, LoginOutcome } from './entities';
 
 /** Puerto de acceso al backend de autenticación. */
 export interface AuthRepository {
   login(email: string, password: string): Promise<AuthResult>;
+  loginChannel?(email: string, password: string, channel: 'WEB' | 'MOBILE'): Promise<LoginOutcome>;
+  verifyChallengeCode?(challengeId: string, pollToken: string, code: string): Promise<AuthResult>;
+  sendChallengeCode?(challengeId: string, pollToken: string): Promise<AuthChallengeStatusDto>;
+  requestChallengeBiometric?(challengeId: string, pollToken: string): Promise<AuthChallengeStatusDto>;
+  getChallengeStatus?(challengeId: string, pollToken: string): Promise<AuthChallengeStatusDto>;
+  cancelChallenge?(challengeId: string, pollToken: string): Promise<AuthChallengeStatusDto>;
+  getPendingLogin2fa?(): Promise<PendingLogin2faDto[]>;
+  approveLogin2fa?(challengeId: string, confirmationToken: string): Promise<PendingLogin2faDto>;
+  rejectLogin2fa?(challengeId: string): Promise<PendingLogin2faDto>;
   loginBiometric(email: string, biometricType: BiometricType, secret: string): Promise<AuthResult>;
   enrollBiometric(idClient: number, biometricType: BiometricType, secret: string): Promise<void>;
   refresh(refreshToken: string): Promise<AuthResult>;

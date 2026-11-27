@@ -1,5 +1,9 @@
+import { Platform } from 'react-native';
+
 import { authDeps } from '../di';
-import type { AuthResult } from '../domain/entities';
+import type { AuthChallengeStatusDto, PendingLogin2faDto } from '../data/dto';
+import { toAuthResult } from '../data/mappers';
+import type { AuthResult, LoginOutcome } from '../domain/entities';
 import {
   confirmOperationWithBiometrics,
   enableBiometrics,
@@ -19,9 +23,107 @@ async function persistAndSet(result: AuthResult): Promise<AuthResult> {
   return result;
 }
 
+export async function completeAuthChallenge(result: AuthResult): Promise<void> {
+  await authDeps.store.saveLastEmail(result.session.email);
+  await persistAndSet(result);
+}
+
 export async function signInWithPassword(email: string, password: string): Promise<void> {
   const result = await loginWithPassword(authDeps, email, password);
   await persistAndSet(result);
+}
+
+export async function signInWithPasswordChallenge(
+  email: string,
+  password: string,
+): Promise<LoginOutcome> {
+  const channel = Platform.OS === 'web' ? 'WEB' : 'MOBILE';
+  if (authDeps.repo.loginChannel) {
+    const outcome = await authDeps.repo.loginChannel(email.trim(), password, channel);
+    await authDeps.store.saveLastEmail(email.trim().toLowerCase());
+    if (outcome.kind === 'authenticated') {
+      await persistAndSet(outcome.auth);
+    }
+    return outcome;
+  }
+  const result = await loginWithPassword(authDeps, email, password);
+  await persistAndSet(result);
+  return { kind: 'authenticated', auth: result };
+}
+
+export async function verifyEmailOrLoginCode(
+  challengeId: string,
+  pollToken: string,
+  code: string,
+): Promise<void> {
+  if (!authDeps.repo.verifyChallengeCode) {
+    throw new Error('Verificación de código no disponible');
+  }
+  const result = await authDeps.repo.verifyChallengeCode(challengeId, pollToken, code.trim());
+  await completeAuthChallenge(result);
+}
+
+export async function send2faEmailCode(
+  challengeId: string,
+  pollToken: string,
+): Promise<AuthChallengeStatusDto> {
+  if (!authDeps.repo.sendChallengeCode) {
+    throw new Error('Envío de código no disponible');
+  }
+  return authDeps.repo.sendChallengeCode(challengeId, pollToken);
+}
+
+export async function request2faMobileFingerprint(
+  challengeId: string,
+  pollToken: string,
+): Promise<AuthChallengeStatusDto> {
+  if (!authDeps.repo.requestChallengeBiometric) {
+    throw new Error('Autorización biométrica remota no disponible');
+  }
+  return authDeps.repo.requestChallengeBiometric(challengeId, pollToken);
+}
+
+export async function poll2faChallengeStatus(
+  challengeId: string,
+  pollToken: string,
+): Promise<AuthChallengeStatusDto> {
+  if (!authDeps.repo.getChallengeStatus) {
+    throw new Error('Consulta de desafío 2FA no disponible');
+  }
+  const status = await authDeps.repo.getChallengeStatus(challengeId, pollToken);
+  if (status.authResponse?.token && status.authResponse?.refreshToken) {
+    const auth = toAuthResult(status.authResponse);
+    await completeAuthChallenge(auth);
+  }
+  return status;
+}
+
+export async function cancel2faChallenge(challengeId: string, pollToken: string): Promise<void> {
+  if (authDeps.repo.cancelChallenge) {
+    await authDeps.repo.cancelChallenge(challengeId, pollToken).catch(() => undefined);
+  }
+}
+
+export async function getPendingLogin2faRequests(): Promise<PendingLogin2faDto[]> {
+  if (!authDeps.repo.getPendingLogin2fa) return [];
+  return authDeps.repo.getPendingLogin2fa();
+}
+
+export async function approvePendingLogin2fa(
+  challengeId: string,
+  confirmationToken: string,
+): Promise<PendingLogin2faDto> {
+  if (!authDeps.repo.approveLogin2fa) {
+    throw new Error('Aprobación de acceso remoto no disponible');
+  }
+  return authDeps.repo.approveLogin2fa(challengeId, confirmationToken);
+}
+
+export async function rejectPendingLogin2fa(challengeId: string): Promise<PendingLogin2faDto> {
+  if (!authDeps.repo.rejectLogin2fa) {
+    throw new Error('Rechazo de acceso remoto no disponible');
+  }
+  return authDeps.repo.rejectLogin2fa(challengeId);
 }
 
 export async function signInWithBiometrics(email: string): Promise<void> {

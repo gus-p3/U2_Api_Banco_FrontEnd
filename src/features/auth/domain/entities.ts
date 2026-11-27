@@ -23,3 +23,20 @@ export interface AuthResult {
   session: Session;
   tokens: Tokens;
 }
+
+export type Login2faMethod = 'EMAIL_CODE' | 'MOBILE_BIOMETRIC';
+export type VerificationPurpose = 'EMAIL_VERIFICATION' | 'LOGIN_2FA';
+
+export interface AuthChallenge {
+  email: string;
+  purpose: VerificationPurpose;
+  challengeId: string;
+  pollToken: string;
+  availableMethods: Login2faMethod[];
+  codeSent: boolean;
+  hasBiometricRegistered: boolean;
+  expiresInSeconds: number;
+}
+
+export type LoginOutcome =
+  { kind: 'authenticated'; auth: AuthResult } | { kind: 'challenge'; challenge: AuthChallenge };

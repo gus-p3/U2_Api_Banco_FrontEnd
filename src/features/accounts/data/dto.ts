@@ -28,6 +28,12 @@ export interface ClientDto {
   birthDate?: string;
   curp: string;
   rfc?: string;
+  idGender?: number;
+  genderName?: string;
+  idNationality?: number;
+  nationalityName?: string;
+  idMaritalStatus?: number;
+  maritalStatusName?: string;
   isActive?: boolean;
   primaryAccount?: AccountDto;
   accounts?: AccountDto[];
@@ -37,7 +43,10 @@ export interface ClientDto {
     exteriorNumber?: string;
     interiorNumber?: string;
     neighborhood?: string;
+    idMunicipality?: number;
     municipalityName?: string;
+    idState?: number;
+    cveEnt?: string;
     stateName?: string;
     postalCode?: string;
   };

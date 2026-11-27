@@ -6,9 +6,13 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 import { toAppError } from '@/core/errors/toAppError';
 import { formatCurrency, maskAccount } from '@/core/utils/format';
 import { accountKeys } from '@/features/accounts/presentation/hooks';
+import type { PendingLogin2faDto } from '@/features/auth/data/dto';
 import {
+  approvePendingLogin2fa,
   confirmPaymentWithFingerprint,
+  getPendingLogin2faRequests,
   isBiometricConfirmationAvailable,
+  rejectPendingLogin2fa,
 } from '@/features/auth/presentation/authActions';
 import { useSessionStore } from '@/features/auth/presentation/sessionStore';
 import {
@@ -25,6 +29,7 @@ const POLL_INTERVAL_MS = 3000;
 
 async function setupMobileNotifications(
   onTapAuthorization: (autorizacionId: string) => void,
+  onTapLogin2fa: (challengeId: string) => void,
 ): Promise<() => void> {
   if (Platform.OS === 'web') return () => undefined;
   try {
@@ -41,7 +46,7 @@ async function setupMobileNotifications(
 
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('payment-auth', {
-        name: 'Autorización de pagos',
+        name: 'Autorización de pagos y accesos',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
         sound: 'default',
@@ -56,7 +61,6 @@ async function setupMobileNotifications(
     }
 
     if (granted) {
-      // 1) Intenta token nativo FCM (Android con google-services.json)
       let pushToken: string | null = null;
       try {
         const deviceToken = await Notifications.getDevicePushTokenAsync();
@@ -64,7 +68,7 @@ async function setupMobileNotifications(
           pushToken = deviceToken.data;
         }
       } catch {
-        // En Expo Go o emulador sin FCM puede no estar disponible; intentamos Expo Push Token
+        // Sin FCM nativo disponible
       }
       if (!pushToken) {
         try {
@@ -86,8 +90,11 @@ async function setupMobileNotifications(
     }
 
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as { autorizacionId?: string } | undefined;
-      if (data?.autorizacionId) {
+      const data = response.notification.request.content.data as
+        { type?: string; autorizacionId?: string; challengeId?: string } | undefined;
+      if (data?.type === 'LOGIN_2FA' && data?.challengeId) {
+        onTapLogin2fa(String(data.challengeId));
+      } else if (data?.autorizacionId) {
         onTapAuthorization(String(data.autorizacionId));
       }
     });
@@ -119,8 +126,29 @@ async function triggerLocalAuthNotification(auth: PagoAutorizacionDto): Promise<
   }
 }
 
+async function triggerLocalLogin2faNotification(loginReq: PendingLogin2faDto): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const Notifications = await import('expo-notifications');
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '¿Autorizas inicio de sesión en Web?',
+        body: `Confirma con tu huella el acceso web para ${loginReq.email}.`,
+        sound: 'default',
+        data: {
+          type: 'LOGIN_2FA',
+          challengeId: loginReq.challengeId,
+        },
+      },
+      trigger: null,
+    });
+  } catch {
+    // Silencioso si el entorno no soporta notificaciones locales
+  }
+}
+
 /**
- * Escucha solicitudes de autorización de pagos originadas en la Web.
+ * Escucha solicitudes de autorización originadas en la Web (pagos e inicio de sesión 2FA).
  * Cuando llega una, dispara notificación en Android y muestra el modal para autorizar con huella digital.
  */
 export function RemoteAuthListener() {
@@ -128,22 +156,27 @@ export function RemoteAuthListener() {
   const queryClient = useQueryClient();
 
   const [activeAuth, setActiveAuth] = useState<PagoAutorizacionDto | null>(null);
+  const [activeLogin, setActiveLogin] = useState<PendingLogin2faDto | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
+
   const notifiedIdsRef = useRef<Set<string>>(new Set());
   const dismissedIdsRef = useRef<Set<string>>(new Set());
+  const notifiedLoginIdsRef = useRef<Set<string>>(new Set());
+  const dismissedLoginIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (Platform.OS === 'web' || status !== 'authenticated') {
       setActiveAuth(null);
+      setActiveLogin(null);
       return;
     }
 
     let cancelled = false;
     let cleanupNotif: (() => void) | undefined;
 
-    const checkPending = async (forceOpenId?: string) => {
+    const checkPending = async (forceOpenId?: string, forceLoginId?: string) => {
       try {
         const list = await getPendingRemoteAuthorizations();
         if (cancelled) return;
@@ -163,14 +196,42 @@ export function RemoteAuthListener() {
           setActiveAuth(null);
         }
       } catch {
-        // Error de red transitorio en polling: se reintenta en el siguiente tick
+        // Error de red transitorio
+      }
+
+      try {
+        const loginList = await getPendingLogin2faRequests();
+        if (cancelled) return;
+        const targetLogin = forceLoginId
+          ? (loginList.find((l) => l.challengeId === forceLoginId) ?? loginList[0])
+          : loginList.find((l) => !dismissedLoginIdsRef.current.has(l.challengeId));
+
+        if (targetLogin) {
+          if (!notifiedLoginIdsRef.current.has(targetLogin.challengeId)) {
+            notifiedLoginIdsRef.current.add(targetLogin.challengeId);
+            void triggerLocalLogin2faNotification(targetLogin);
+          }
+          setActiveLogin((prev) => (prev?.challengeId === targetLogin.challengeId ? prev : targetLogin));
+          setErrorMsg(null);
+          setStatusFeedback(null);
+        } else if (!busy) {
+          setActiveLogin(null);
+        }
+      } catch {
+        // Error de red transitorio
       }
     };
 
-    void setupMobileNotifications((autorizacionId) => {
-      dismissedIdsRef.current.delete(autorizacionId);
-      void checkPending(autorizacionId);
-    }).then((fn) => {
+    void setupMobileNotifications(
+      (autorizacionId) => {
+        dismissedIdsRef.current.delete(autorizacionId);
+        void checkPending(autorizacionId, undefined);
+      },
+      (challengeId) => {
+        dismissedLoginIdsRef.current.delete(challengeId);
+        void checkPending(undefined, challengeId);
+      },
+    ).then((fn) => {
       cleanupNotif = fn;
     });
 
@@ -186,11 +247,12 @@ export function RemoteAuthListener() {
     };
   }, [status, busy]);
 
-  if (Platform.OS === 'web' || status !== 'authenticated' || !activeAuth) {
+  if (Platform.OS === 'web' || status !== 'authenticated' || (!activeAuth && !activeLogin)) {
     return null;
   }
 
-  const handleApprove = async () => {
+  const handleApprovePayment = async () => {
+    if (!activeAuth) return;
     setBusy(true);
     setErrorMsg(null);
     setStatusFeedback(null);
@@ -222,7 +284,8 @@ export function RemoteAuthListener() {
     }
   };
 
-  const handleReject = async () => {
+  const handleRejectPayment = async () => {
+    if (!activeAuth) return;
     setBusy(true);
     setErrorMsg(null);
     try {
@@ -236,66 +299,173 @@ export function RemoteAuthListener() {
     }
   };
 
+  const handleApproveLogin = async () => {
+    if (!activeLogin) return;
+    setBusy(true);
+    setErrorMsg(null);
+    setStatusFeedback(null);
+    try {
+      const bioAvailable = await isBiometricConfirmationAvailable();
+      if (!bioAvailable) {
+        setErrorMsg(
+          'Activa tu huella digital en Perfil para poder autorizar accesos desde este dispositivo.',
+        );
+        return;
+      }
+      const confirmationToken = await confirmPaymentWithFingerprint();
+      await approvePendingLogin2fa(activeLogin.challengeId, confirmationToken);
+      dismissedLoginIdsRef.current.add(activeLogin.challengeId);
+      setStatusFeedback('Inicio de sesión en Web autorizado con tu huella digital.');
+      setTimeout(() => {
+        setActiveLogin(null);
+        setStatusFeedback(null);
+      }, 1800);
+    } catch (e) {
+      setErrorMsg(toAppError(e).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRejectLogin = async () => {
+    if (!activeLogin) return;
+    setBusy(true);
+    setErrorMsg(null);
+    try {
+      await rejectPendingLogin2fa(activeLogin.challengeId);
+      dismissedLoginIdsRef.current.add(activeLogin.challengeId);
+      setActiveLogin(null);
+    } catch (e) {
+      setErrorMsg(toAppError(e).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (activeAuth) {
+    return (
+      <AppModal
+        visible={Boolean(activeAuth)}
+        title="¿Autorizas este pago desde Web?"
+        onRequestClose={() => {
+          if (!busy) {
+            dismissedIdsRef.current.add(activeAuth.idAutorizacion);
+            setActiveAuth(null);
+          }
+        }}
+        actions={
+          <>
+            <Button
+              title="Autorizar con huella digital"
+              loading={busy}
+              disabled={Boolean(statusFeedback)}
+              onPress={() => void handleApprovePayment()}
+            />
+            <Button
+              title="Rechazar pago"
+              variant="danger"
+              disabled={busy || Boolean(statusFeedback)}
+              onPress={() => void handleRejectPayment()}
+            />
+          </>
+        }
+      >
+        <View style={styles.headerBadge}>
+          <Ionicons name="finger-print" size={28} color={colors.primary} />
+          <Text style={styles.headerText}>
+            Se inició un pago en tu sesión Web. Confírmalo con tu huella digital solo si tú lo
+            solicitaste.
+          </Text>
+        </View>
+
+        <View style={styles.summary}>
+          <View style={styles.row}>
+            <Text style={styles.label}>Servicio</Text>
+            <Text style={styles.value}>{activeAuth.nombreServicio}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Producto</Text>
+            <Text style={styles.value}>{activeAuth.nombreProducto}</Text>
+          </View>
+          {activeAuth.destinoEnmascarado ? (
+            <View style={styles.row}>
+              <Text style={styles.label}>
+                {activeAuth.tipoPago === 'RECARGA' ? 'Teléfono' : 'Referencia'}
+              </Text>
+              <Text style={styles.value}>{activeAuth.destinoEnmascarado}</Text>
+            </View>
+          ) : null}
+          <View style={styles.row}>
+            <Text style={styles.label}>Cuenta</Text>
+            <Text style={styles.value}>{maskAccount(activeAuth.numCuenta)}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Monto</Text>
+            <Text style={styles.amount}>{formatCurrency(activeAuth.monto)}</Text>
+          </View>
+        </View>
+
+        {errorMsg ? (
+          <Text accessibilityRole="alert" style={styles.error}>
+            {errorMsg}
+          </Text>
+        ) : null}
+        {statusFeedback ? (
+          <Text accessibilityRole="summary" style={styles.success}>
+            {statusFeedback}
+          </Text>
+        ) : null}
+      </AppModal>
+    );
+  }
+
   return (
     <AppModal
-      visible={Boolean(activeAuth)}
-      title="¿Autorizas este pago desde Web?"
+      visible={Boolean(activeLogin)}
+      title="¿Autorizas inicio de sesión en Web?"
       onRequestClose={() => {
-        if (!busy) {
-          dismissedIdsRef.current.add(activeAuth.idAutorizacion);
-          setActiveAuth(null);
+        if (!busy && activeLogin) {
+          dismissedLoginIdsRef.current.add(activeLogin.challengeId);
+          setActiveLogin(null);
         }
       }}
       actions={
         <>
           <Button
-            title="Autorizar con huella digital"
+            title="Autorizar acceso con huella"
             loading={busy}
             disabled={Boolean(statusFeedback)}
-            onPress={() => void handleApprove()}
+            onPress={() => void handleApproveLogin()}
           />
           <Button
-            title="Rechazar pago"
+            title="Rechazar acceso"
             variant="danger"
             disabled={busy || Boolean(statusFeedback)}
-            onPress={() => void handleReject()}
+            onPress={() => void handleRejectLogin()}
           />
         </>
       }
     >
       <View style={styles.headerBadge}>
-        <Ionicons name="finger-print" size={28} color={colors.primary} />
+        <Ionicons name="shield-checkmark-outline" size={28} color={colors.primary} />
         <Text style={styles.headerText}>
-          Se inició un pago en tu sesión Web. Confírmalo con tu huella digital solo si tú lo solicitaste.
+          Alguien intenta iniciar sesión en Banco Digital Web con tu cuenta. Confírmalo con tu huella
+          digital solo si eres tú.
         </Text>
       </View>
 
-      <View style={styles.summary}>
-        <View style={styles.row}>
-          <Text style={styles.label}>Servicio</Text>
-          <Text style={styles.value}>{activeAuth.nombreServicio}</Text>
-        </View>
-        <View style={styles.row}>
-          <Text style={styles.label}>Producto</Text>
-          <Text style={styles.value}>{activeAuth.nombreProducto}</Text>
-        </View>
-        {activeAuth.destinoEnmascarado ? (
+      {activeLogin ? (
+        <View style={styles.summary}>
           <View style={styles.row}>
-            <Text style={styles.label}>
-              {activeAuth.tipoPago === 'RECARGA' ? 'Teléfono' : 'Referencia'}
-            </Text>
-            <Text style={styles.value}>{activeAuth.destinoEnmascarado}</Text>
+            <Text style={styles.label}>Cuenta</Text>
+            <Text style={styles.value}>{activeLogin.email}</Text>
           </View>
-        ) : null}
-        <View style={styles.row}>
-          <Text style={styles.label}>Cuenta</Text>
-          <Text style={styles.value}>{maskAccount(activeAuth.numCuenta)}</Text>
+          <View style={styles.row}>
+            <Text style={styles.label}>Canal</Text>
+            <Text style={styles.value}>{activeLogin.channel}</Text>
+          </View>
         </View>
-        <View style={styles.row}>
-          <Text style={styles.label}>Monto</Text>
-          <Text style={styles.amount}>{formatCurrency(activeAuth.monto)}</Text>
-        </View>
-      </View>
+      ) : null}
 
       {errorMsg ? (
         <Text accessibilityRole="alert" style={styles.error}>

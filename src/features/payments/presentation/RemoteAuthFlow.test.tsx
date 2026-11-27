@@ -52,6 +52,9 @@ const mockBioAvailable = jest.fn();
 jest.mock('@/features/auth/presentation/authActions', () => ({
   confirmPaymentWithFingerprint: () => mockConfirmFingerprint(),
   isBiometricConfirmationAvailable: () => mockBioAvailable(),
+  getPendingLogin2faRequests: jest.fn().mockResolvedValue([]),
+  approvePendingLogin2fa: jest.fn().mockResolvedValue({}),
+  rejectPendingLogin2fa: jest.fn().mockResolvedValue({}),
 }));
 
 jest.mock('../data/authorizationRepository', () => {

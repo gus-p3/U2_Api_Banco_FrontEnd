@@ -32,6 +32,9 @@ export const errorMessages: Record<ApiErrorCode, string> = {
   STRONG_AUTH_REQUIRED:
     'Para autorizar el pago es obligatorio confirmar tu identidad con huella digital en la app móvil.',
   PAYMENT_FORBIDDEN: 'No es posible operar con la cuenta indicada.',
+  VERIFICATION_CODE_INVALID: 'El código de verificación es incorrecto.',
+  VERIFICATION_CHALLENGE_EXPIRED: 'El código o solicitud expiró. Intenta nuevamente.',
+  EMAIL_DELIVERY_FAILED: 'No pudimos enviar el correo de verificación. Intenta de nuevo.',
   BAD_REQUEST: 'La solicitud no es válida. Revisa los datos capturados.',
   INVALID_PARAM: 'Alguno de los datos enviados no es válido.',
   METHOD_NOT_ALLOWED: 'Operación no permitida.',
