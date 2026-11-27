@@ -1,20 +1,25 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { AppProviders, queryClient } from '@/core/app/providers';
 import { useSessionStore } from '@/features/auth/presentation/sessionStore';
 import { RemoteAuthListener } from '@/features/payments/presentation/RemoteAuthListener';
-import { colors, radii, spacing, typography } from '@/shared/theme';
+import { colors } from '@/shared/theme';
+import { AnimatedSplash } from '@/shared/ui/AnimatedSplash';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const splashArt = require('../../assets/splash-icon.png');
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 function NavigationGuard() {
   const status = useSessionStore((s) => s.status);
   const segments = useSegments();
   const router = useRouter();
+
+  useEffect(() => {
+    void SplashScreen.hideAsync().catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (status === 'booting') return;
@@ -30,21 +35,16 @@ function NavigationGuard() {
     }
   }, [status, segments, router]);
 
-  if (status === 'booting') {
-    return (
-      <View style={styles.boot}>
-        <Image source={splashArt} style={styles.splashImage} resizeMode="contain" />
-        <View style={styles.splashBadge}>
-          <Text style={styles.splashBadgeText}>BANCA DIGITAL</Text>
-        </View>
-        <Text style={styles.splashTitle}>Banco Digital</Text>
-        <Text style={styles.splashSubtitle}>Tu alcancía y pagos al instante</Text>
-        <ActivityIndicator size="small" color={colors.primary} style={styles.splashSpinner} />
-      </View>
-    );
-  }
-
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <View style={styles.root}>
+      {status === 'booting' ? (
+        <View style={styles.boot} />
+      ) : (
+        <Stack screenOptions={{ headerShown: false }} />
+      )}
+      <AnimatedSplash appReady={status !== 'booting'} />
+    </View>
+  );
 }
 
 export default function RootLayout() {
@@ -58,41 +58,6 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  boot: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-    gap: spacing.xs,
-  },
-  splashImage: {
-    width: 240,
-    height: 240,
-    marginBottom: spacing.sm,
-  },
-  splashBadge: {
-    backgroundColor: colors.primarySoft,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    borderRadius: radii.pill,
-  },
-  splashBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.primary,
-    letterSpacing: 1,
-  },
-  splashTitle: {
-    ...typography.title,
-    color: colors.text,
-  },
-  splashSubtitle: {
-    ...typography.body,
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  splashSpinner: {
-    marginTop: spacing.lg,
-  },
+  root: { flex: 1, backgroundColor: colors.surface },
+  boot: { flex: 1, backgroundColor: colors.surface },
 });
