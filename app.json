@@ -11,7 +11,7 @@
       "package": "com.intrumentoev.bancodigital",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#2563EB",
+        "backgroundColor": "#1C69F7",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
