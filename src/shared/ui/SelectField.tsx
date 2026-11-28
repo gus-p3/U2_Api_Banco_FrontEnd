@@ -3,7 +3,9 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -110,84 +112,89 @@ export function SelectField<T extends string | number = string | number>({
       ) : null}
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <Pressable style={styles.sheet} onPress={() => undefined}>
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>{label}</Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Cerrar lista"
-                onPress={() => setOpen(false)}
-                style={styles.closeBtn}
-              >
-                <Ionicons name="close" size={22} color={colors.text} />
-              </Pressable>
-            </View>
-
-            {showSearch ? (
-              <View style={styles.searchWrap}>
-                <Ionicons name="search" size={18} color={colors.textMuted} />
-                <TextInput
-                  placeholder="Buscar..."
-                  placeholderTextColor="#94A3B8"
-                  autoComplete="off"
-                  importantForAutofill="no"
-                  textContentType="none"
-                  value={query}
-                  onChangeText={(txt) => {
-                    setQuery(txt);
-                    setVisibleCount(SELECT_PAGE_SIZE);
-                  }}
-                  style={styles.searchInput}
-                />
+        <KeyboardAvoidingView
+          style={styles.modalAvoid}
+          behavior={Platform.OS === 'web' ? undefined : 'padding'}
+        >
+          <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
+            <Pressable style={styles.sheet} onPress={() => undefined}>
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetTitle}>{label}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Cerrar lista"
+                  onPress={() => setOpen(false)}
+                  style={styles.closeBtn}
+                >
+                  <Ionicons name="close" size={22} color={colors.text} />
+                </Pressable>
               </View>
-            ) : null}
 
-            <FlatList
-              style={styles.list}
-              data={visibleOptions}
-              keyExtractor={(opt) => String(opt.value)}
-              keyboardShouldPersistTaps="handled"
-              onEndReached={handleLoadMore}
-              onEndReachedThreshold={0.4}
-              initialNumToRender={SELECT_PAGE_SIZE}
-              ListEmptyComponent={<Text style={styles.emptyText}>{emptyText}</Text>}
-              ListFooterComponent={
-                hasMore ? (
-                  <View style={styles.footerLoader}>
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  </View>
-                ) : undefined
-              }
-              renderItem={({ item: opt }) => {
-                const active = opt.value === value;
-                return (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    style={[styles.optionRow, active && styles.optionRowActive]}
-                    onPress={() => {
-                      onSelect(opt.value);
-                      setOpen(false);
+              {showSearch ? (
+                <View style={styles.searchWrap}>
+                  <Ionicons name="search" size={18} color={colors.textMuted} />
+                  <TextInput
+                    placeholder="Buscar..."
+                    placeholderTextColor="#94A3B8"
+                    autoComplete="off"
+                    importantForAutofill="no"
+                    textContentType="none"
+                    value={query}
+                    onChangeText={(txt) => {
+                      setQuery(txt);
+                      setVisibleCount(SELECT_PAGE_SIZE);
                     }}
-                  >
-                    <View style={styles.optionTexts}>
-                      <Text style={[styles.optionLabel, active && styles.optionLabelActive]}>
-                        {opt.label}
-                      </Text>
-                      {opt.subtitle ? (
-                        <Text style={styles.optionSubtitle}>{opt.subtitle}</Text>
-                      ) : undefined}
+                    style={styles.searchInput}
+                  />
+                </View>
+              ) : null}
+
+              <FlatList
+                style={styles.list}
+                data={visibleOptions}
+                keyExtractor={(opt) => String(opt.value)}
+                keyboardShouldPersistTaps="handled"
+                onEndReached={handleLoadMore}
+                onEndReachedThreshold={0.4}
+                initialNumToRender={SELECT_PAGE_SIZE}
+                ListEmptyComponent={<Text style={styles.emptyText}>{emptyText}</Text>}
+                ListFooterComponent={
+                  hasMore ? (
+                    <View style={styles.footerLoader}>
+                      <ActivityIndicator size="small" color={colors.primary} />
                     </View>
-                    {active ? (
-                      <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                    ) : undefined}
-                  </Pressable>
-                );
-              }}
-            />
+                  ) : undefined
+                }
+                renderItem={({ item: opt }) => {
+                  const active = opt.value === value;
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      style={[styles.optionRow, active && styles.optionRowActive]}
+                      onPress={() => {
+                        onSelect(opt.value);
+                        setOpen(false);
+                      }}
+                    >
+                      <View style={styles.optionTexts}>
+                        <Text style={[styles.optionLabel, active && styles.optionLabelActive]}>
+                          {opt.label}
+                        </Text>
+                        {opt.subtitle ? (
+                          <Text style={styles.optionSubtitle}>{opt.subtitle}</Text>
+                        ) : undefined}
+                      </View>
+                      {active ? (
+                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                      ) : undefined}
+                    </Pressable>
+                  );
+                }}
+              />
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -214,6 +221,7 @@ const styles = StyleSheet.create({
   placeholderText: { color: '#94A3B8' },
   error: { ...typography.caption, color: colors.danger },
   hint: { ...typography.caption, color: colors.textMuted },
+  modalAvoid: { flex: 1 },
   backdrop: {
     flex: 1,
     backgroundColor: colors.overlay,

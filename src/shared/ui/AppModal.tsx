@@ -1,5 +1,13 @@
 import { memo, type ReactNode } from 'react';
-import { Modal as RNModal, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal as RNModal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { colors, radii, shadows, spacing, typography } from '../theme';
 
@@ -16,19 +24,24 @@ export interface AppModalProps {
 function AppModalBase({ visible, title, message, children, actions, onRequestClose }: AppModalProps) {
   return (
     <RNModal transparent visible={visible} animationType="fade" onRequestClose={onRequestClose}>
-      <View style={styles.overlay}>
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={onRequestClose}
-          accessibilityLabel="Cerrar"
-        />
-        <View style={styles.card} accessibilityViewIsModal accessibilityRole="alert">
-          <Text style={styles.title}>{title}</Text>
-          {message ? <Text style={styles.message}>{message}</Text> : null}
-          {children}
-          {actions ? <View style={styles.actions}>{actions}</View> : null}
+      <KeyboardAvoidingView
+        style={styles.avoid}
+        behavior={Platform.OS === 'web' ? undefined : 'padding'}
+      >
+        <View style={styles.overlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={onRequestClose}
+            accessibilityLabel="Cerrar"
+          />
+          <View style={styles.card} accessibilityViewIsModal accessibilityRole="alert">
+            <Text style={styles.title}>{title}</Text>
+            {message ? <Text style={styles.message}>{message}</Text> : null}
+            {children}
+            {actions ? <View style={styles.actions}>{actions}</View> : null}
+          </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </RNModal>
   );
 }
@@ -36,6 +49,7 @@ function AppModalBase({ visible, title, message, children, actions, onRequestClo
 export const AppModal = memo(AppModalBase);
 
 const styles = StyleSheet.create({
+  avoid: { flex: 1 },
   overlay: {
     flex: 1,
     backgroundColor: colors.overlay,
