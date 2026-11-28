@@ -19,7 +19,16 @@ import {
   useStates,
 } from '@/features/catalogs/presentation/hooks';
 import { colors, radii, spacing, typography } from '@/shared/theme';
-import { BirthDatePickerField, Button, Card, Input, Screen, SelectField } from '@/shared/ui';
+import {
+  AppModal,
+  BirthDatePickerField,
+  Button,
+  Card,
+  Input,
+  Loader,
+  Screen,
+  SelectField,
+} from '@/shared/ui';
 
 import type { AuthResponseDto } from '../data/dto';
 import { toAuthChallenge } from '../data/mappers';
@@ -86,6 +95,12 @@ export function RegisterScreen() {
   const [resendingCode, setResendingCode] = useState(false);
   const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
   const [autoCalcBanner, setAutoCalcBanner] = useState<string | null>(null);
+  const [submitModal, setSubmitModal] = useState<{
+    status: 'idle' | 'loading' | 'success' | 'error';
+    title: string;
+    message: string;
+    challenge?: AuthChallenge | null;
+  }>({ status: 'idle', title: '', message: '', challenge: null });
 
   const curpManuallyEditedRef = useRef(false);
   const rfcManuallyEditedRef = useRef(false);
@@ -236,7 +251,7 @@ export function RegisterScreen() {
     }
     if (updated) {
       setAutoCalcBanner(
-        'Prellenamos la base de tu CURP (13 caracteres) y RFC (10 caracteres). Completa los caracteres finales; puedes editar o borrar cualquier campo libremente.',
+        'Prellenamos los primeros 16 caracteres de tu CURP (solo faltan los últimos 2) y los primeros 10 de tu RFC (faltan los últimos 3). Puedes editar o borrar libremente.',
       );
     }
   }, [
@@ -274,7 +289,7 @@ export function RegisterScreen() {
     }
     setAutoCalcBanner(
       nextCurp || nextRfc
-        ? 'Base de CURP (13 chars) y RFC (10 chars) restablecida. Completa los caracteres finales.'
+        ? 'Base de CURP (16 chars) y RFC (10 chars) restablecida. Completa solo los caracteres finales.'
         : 'Completa tus datos del Paso 1 para prellenar tu CURP y RFC.',
     );
   };
@@ -296,6 +311,13 @@ export function RegisterScreen() {
 
   const onSubmit = async (v: RegisterFormValues) => {
     setServerError(null);
+    setSubmitModal({
+      status: 'loading',
+      title: 'Creando tu cuenta bancaria...',
+      message:
+        'Estamos validando tus datos, generando tu cuenta digital y enviando tu código de verificación al correo.',
+      challenge: null,
+    });
     try {
       const selectedProf = professions.data?.find((p) => p.id === v.idProfession);
       const body: Record<string, string | number> = {
@@ -333,24 +355,33 @@ export function RegisterScreen() {
       const { data } = await http.post<{ auth?: AuthResponseDto }>('/v1/clientes', body, {
         skipAuth: true,
       });
-      const challenge = data?.auth ? toAuthChallenge(data.auth) : null;
-      if (challenge) {
-        setVerificationChallenge(challenge);
-        setVerificationCode('');
-        setCodeTouched(false);
-        setVerificationNotice(
-          `Enviamos un código de 6 dígitos a ${challenge.email} para verificar tu cuenta creada.`,
-        );
-        return;
+      let challenge = data?.auth ? toAuthChallenge(data.auth) : null;
+      if (!challenge) {
+        const outcome = await signInWithPasswordChallenge(v.email.trim(), v.password);
+        if (outcome.kind === 'challenge') {
+          challenge = outcome.challenge;
+        }
       }
-      const outcome = await signInWithPasswordChallenge(v.email.trim(), v.password);
-      if (outcome.kind === 'challenge') {
-        setVerificationChallenge(outcome.challenge);
-        setVerificationCode('');
-        setCodeTouched(false);
+
+      if (challenge) {
+        setSubmitModal({
+          status: 'success',
+          title: '¡Tu cuenta fue creada con éxito!',
+          message: `Generamos tu cuenta bancaria digital y enviamos un código de 6 dígitos a ${challenge.email} para verificarla.`,
+          challenge,
+        });
+      } else {
+        setSubmitModal({ status: 'idle', title: '', message: '', challenge: null });
       }
     } catch (e) {
-      setServerError(toAppError(e).message);
+      const msg = toAppError(e).message;
+      setServerError(msg);
+      setSubmitModal({
+        status: 'error',
+        title: 'No se pudo crear la cuenta',
+        message: msg,
+        challenge: null,
+      });
     }
   };
 
@@ -629,7 +660,7 @@ export function RegisterScreen() {
                     field.onChange(sanitizeCurp(txt));
                   }}
                   error={errors.curp?.message}
-                  hint="Prellenamos los primeros 13 caracteres; completa los 5 finales de tu CURP."
+                  hint="Prellenamos los primeros 16 caracteres; completa los últimos 2 de tu CURP."
                 />
               )}
             />
@@ -955,6 +986,55 @@ export function RegisterScreen() {
         variant="ghost"
         onPress={() => router.replace('/(auth)/login')}
       />
+
+      <AppModal
+        visible={submitModal.status !== 'idle'}
+        title={submitModal.title}
+        message={submitModal.message}
+        onRequestClose={
+          submitModal.status === 'error'
+            ? () => setSubmitModal({ status: 'idle', title: '', message: '', challenge: null })
+            : undefined
+        }
+        actions={
+          submitModal.status === 'success' && submitModal.challenge ? (
+            <Button
+              title="Ingresar código de verificación"
+              onPress={() => {
+                const ch = submitModal.challenge!;
+                setSubmitModal({ status: 'idle', title: '', message: '', challenge: null });
+                setVerificationChallenge(ch);
+                setVerificationCode('');
+                setCodeTouched(false);
+                setVerificationNotice(
+                  `Enviamos un código de 6 dígitos a ${ch.email} para verificar tu cuenta creada.`,
+                );
+              }}
+            />
+          ) : submitModal.status === 'error' ? (
+            <Button
+              title="Entendido, revisar datos"
+              onPress={() => setSubmitModal({ status: 'idle', title: '', message: '', challenge: null })}
+            />
+          ) : undefined
+        }
+      >
+        {submitModal.status === 'loading' ? (
+          <Loader message="Procesando solicitud..." />
+        ) : submitModal.status === 'success' ? (
+          <View style={styles.modalIconWrap}>
+            <View style={[styles.modalIconCircle, { backgroundColor: colors.successBg }]}>
+              <Ionicons name="checkmark-circle" size={44} color={colors.success} />
+            </View>
+          </View>
+        ) : submitModal.status === 'error' ? (
+          <View style={styles.modalIconWrap}>
+            <View style={[styles.modalIconCircle, { backgroundColor: colors.dangerBg }]}>
+              <Ionicons name="alert-circle" size={44} color={colors.danger} />
+            </View>
+          </View>
+        ) : null}
+      </AppModal>
     </Screen>
   );
 }
@@ -1025,4 +1105,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   navBtnWrap: { flex: 1 },
+  modalIconWrap: { alignItems: 'center', marginVertical: spacing.xs },
+  modalIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

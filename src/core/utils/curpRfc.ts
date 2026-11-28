@@ -207,6 +207,17 @@ function firstInternalVowel(word: string): string {
   return 'X';
 }
 
+function firstInternalConsonant(word: string): string {
+  if (!word) return 'X';
+  for (let i = 1; i < word.length; i += 1) {
+    const ch = word[i]!;
+    if (!VOWELS.has(ch) && /[A-Z]/.test(ch)) {
+      return ch;
+    }
+  }
+  return 'X';
+}
+
 function sanitizeInconvenient(prefix4: string): string {
   if (INCONVENIENT_WORDS.has(prefix4)) {
     return `${prefix4[0]}X${prefix4.slice(2)}`;
@@ -243,9 +254,9 @@ export function resolveCurpStateCode(inegiOrCurpCode?: string): string | null {
 }
 
 /**
- * Calcula los primeros 13 caracteres de la CURP (ej. MEAB051016HGT):
- * 4 letras iniciales + AAMMDD + sexo (H/M) + entidad federativa (2 letras).
- * Los 5 caracteres restantes los ingresa el usuario.
+ * Calcula los primeros 16 caracteres deterministas de la CURP (ej. MEAB051016HGTNMR):
+ * 4 letras iniciales + AAMMDD + sexo (H/M) + entidad federativa (2 letras) + 3 consonantes internas.
+ * Solo los últimos 2 caracteres (homonimia + dígito verificador RENAPO) los completa el usuario.
  */
 export function calculateCurp(input: IdentityCalcInput): string | null {
   const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.birthDate.trim());
@@ -269,7 +280,11 @@ export function calculateCurp(input: IdentityCalcInput): string | null {
   const l4 = nom[0] ?? 'X';
   const prefix4 = sanitizeInconvenient(`${l1}${l2}${l3}${l4}`);
 
-  return `${prefix4}${yy}${mm}${dd}${sex}${stateCode}`;
+  const c1 = firstInternalConsonant(pat);
+  const c2 = mat ? firstInternalConsonant(mat) : 'X';
+  const c3 = firstInternalConsonant(nom);
+
+  return `${prefix4}${yy}${mm}${dd}${sex}${stateCode}${c1}${c2}${c3}`;
 }
 
 /**

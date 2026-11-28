@@ -1,7 +1,7 @@
 import { calculateCurp, calculateRfc } from './curpRfc';
 
-describe('calculateCurp y calculateRfc (prefijos deterministas)', () => {
-  it('calcula los primeros 13 caracteres de la CURP y los primeros 10 del RFC', () => {
+describe('calculateCurp y calculateRfc (prefijos deterministas estándar bancario)', () => {
+  it('calcula los primeros 16 caracteres de la CURP (faltan últimos 2) y los primeros 10 del RFC (faltan últimos 3)', () => {
     const input = {
       firstName: 'Alejandro',
       secondName: 'Carlos',
@@ -14,8 +14,9 @@ describe('calculateCurp y calculateRfc (prefijos deterministas)', () => {
     const curpBase = calculateCurp(input);
     const rfcBase = calculateRfc(input);
 
-    expect(curpBase).toBe('HEGA950515HDF');
-    expect(curpBase).toHaveLength(13);
+    // HeRnández (R) · GaRcía (R) · ALejandro (L)
+    expect(curpBase).toBe('HEGA950515HDFRRL');
+    expect(curpBase).toHaveLength(16);
 
     expect(rfcBase).toBe('HEGA950515');
     expect(rfcBase).toHaveLength(10);
@@ -31,8 +32,8 @@ describe('calculateCurp y calculateRfc (prefijos deterministas)', () => {
       genderName: 'Femenino',
       birthStateCode: '14',
     });
-    expect(curpBase).toBe('LOPF010820MJC');
-    expect(curpBase).toHaveLength(13);
+    expect(curpBase).toBe('LOPF010820MJCPRR');
+    expect(curpBase).toHaveLength(16);
   });
 
   it('soporta apellido materno opcional (usa X en CURP y regla SAT en RFC)', () => {
@@ -45,7 +46,8 @@ describe('calculateCurp y calculateRfc (prefijos deterministas)', () => {
       genderName: 'Hombre',
       birthStateCode: 'NE',
     };
-    expect(calculateCurp(input)).toBe('RAXG980310HNE');
+    expect(calculateCurp(input)).toBe('RAXG980310HNEMXS');
+    expect(calculateCurp(input)).toHaveLength(16);
     expect(calculateRfc(input)).toBe('RAGU980310');
   });
 
@@ -58,6 +60,6 @@ describe('calculateCurp y calculateRfc (prefijos deterministas)', () => {
       genderName: 'Mujer',
       birthStateCode: '19',
     });
-    expect(curpBase).toBe('VXCA920105MNL');
+    expect(curpBase).toBe('VXCA920105MNLCRN');
   });
 });
