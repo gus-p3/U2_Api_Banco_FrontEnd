@@ -348,7 +348,7 @@ export function EditProfileScreen() {
           <SectionHeader
             icon="person-outline"
             title="Nombre completo"
-            subtitle="Primer/segundo nombre y apellidos (hasta 62 caracteres)"
+            subtitle="Primer/segundo nombre y apellidos"
           />
           <Controller
             control={control}

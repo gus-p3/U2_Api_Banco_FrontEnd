@@ -497,7 +497,6 @@ export function RegisterScreen() {
                   onBlur={field.onBlur}
                   onChangeText={(txt) => field.onChange(sanitizeLettersOnly(txt))}
                   error={errors.secondName?.message}
-                  hint="Opcional · Hasta 62 caracteres."
                 />
               )}
             />
@@ -530,7 +529,6 @@ export function RegisterScreen() {
                   onBlur={field.onBlur}
                   onChangeText={(txt) => field.onChange(sanitizeLettersOnly(txt))}
                   error={errors.secondLastName?.message}
-                  hint="Opcional · Hasta 62 caracteres."
                 />
               )}
             />
