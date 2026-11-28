@@ -59,6 +59,7 @@ export function toCustomer(dto: ClientDto): Customer {
     maritalStatusId: dto.idMaritalStatus,
     maritalStatusName: dto.maritalStatusName,
     isActive: dto.isActive ?? true,
+    hasBiometric: dto.hasBiometric,
     accounts,
     primaryAccount: dto.primaryAccount ? toAccount(dto.primaryAccount) : accounts[0],
     address,

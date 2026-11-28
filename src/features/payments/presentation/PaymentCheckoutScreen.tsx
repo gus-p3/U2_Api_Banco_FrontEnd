@@ -73,6 +73,7 @@ export function PaymentCheckoutScreen() {
   const { accounts } = useAccounts();
   const { data: customer } = useCustomer();
   const operationLimit = customer?.operationAmountMax;
+  const webMissingBiometric = isWebRemote && customer?.hasBiometric === false;
   const validateRefMutation = useValidateReference();
   const payMutation = usePay();
 
@@ -274,6 +275,7 @@ export function PaymentCheckoutScreen() {
   };
 
   const canContinue =
+    !webMissingBiometric &&
     !accountError &&
     (kind === 'RECARGA'
       ? !phoneError
@@ -284,6 +286,13 @@ export function PaymentCheckoutScreen() {
     setPhoneTouched(true);
     setReferenceTouched(true);
     setAmountTouched(true);
+
+    if (webMissingBiometric) {
+      setFormError(
+        'Debes activar tu huella digital en la app Android (sección Perfil) antes de realizar pagos desde Web.',
+      );
+      return;
+    }
 
     if (accountError) {
       setFormError(accountError);
@@ -529,7 +538,20 @@ export function PaymentCheckoutScreen() {
           </>
         )}
 
-        {isWebRemote ? (
+        {isWebRemote && webMissingBiometric ? (
+          <View style={styles.biometricNotice} accessibilityRole="alert">
+            <Ionicons name="finger-print" size={20} color={colors.danger} />
+            <View style={styles.biometricNoticeTexts}>
+              <Text style={[styles.biometricNoticeTitle, { color: colors.danger }]}>
+                Activa tu huella digital en Android para pagar desde Web
+              </Text>
+              <Text style={styles.biometricNoticeBody}>
+                Aún no tienes huella digital registrada en tu teléfono. Inicia sesión en la app Android,
+                entra a Perfil y activa tu huella digital para poder autorizar pagos.
+              </Text>
+            </View>
+          </View>
+        ) : isWebRemote ? (
           <View style={styles.biometricNotice}>
             <Ionicons name="phone-portrait-outline" size={20} color={colors.primary} />
             <View style={styles.biometricNoticeTexts}>

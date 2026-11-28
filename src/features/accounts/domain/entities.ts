@@ -39,6 +39,7 @@ export interface Customer {
   maritalStatusId?: number;
   maritalStatusName?: string;
   isActive: boolean;
+  hasBiometric?: boolean;
   accounts: Account[];
   primaryAccount?: Account;
   address?: string;

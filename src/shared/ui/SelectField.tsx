@@ -130,6 +130,9 @@ export function SelectField<T extends string | number = string | number>({
                 <TextInput
                   placeholder="Buscar..."
                   placeholderTextColor="#94A3B8"
+                  autoComplete="off"
+                  importantForAutofill="no"
+                  textContentType="none"
                   value={query}
                   onChangeText={(txt) => {
                     setQuery(txt);

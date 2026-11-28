@@ -35,6 +35,7 @@ export interface ClientDto {
   idMaritalStatus?: number;
   maritalStatusName?: string;
   isActive?: boolean;
+  hasBiometric?: boolean;
   primaryAccount?: AccountDto;
   accounts?: AccountDto[];
   contactDetail?: { email?: string; mobilePhone?: string; alternativePhone?: string };

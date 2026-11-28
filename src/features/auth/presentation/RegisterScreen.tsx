@@ -699,8 +699,9 @@ export function RegisterScreen() {
                 <Input
                   label="Correo electrónico"
                   keyboardType="email-address"
-                  autoComplete="email"
-                  textContentType="emailAddress"
+                  autoComplete="off"
+                  importantForAutofill="no"
+                  textContentType="none"
                   placeholder="correo@ejemplo.com"
                   maxLength={100}
                   value={field.value}
@@ -898,8 +899,9 @@ export function RegisterScreen() {
                   label="Contraseña"
                   placeholder="Mínimo 12 caracteres"
                   secureTextEntry
-                  autoComplete="new-password"
-                  textContentType="newPassword"
+                  autoComplete="off"
+                  importantForAutofill="no"
+                  textContentType="none"
                   maxLength={100}
                   value={field.value}
                   onBlur={field.onBlur}
@@ -931,8 +933,9 @@ export function RegisterScreen() {
                   label="Confirmar contraseña"
                   placeholder="Vuelve a escribir tu contraseña"
                   secureTextEntry
-                  autoComplete="new-password"
-                  textContentType="newPassword"
+                  autoComplete="off"
+                  importantForAutofill="no"
+                  textContentType="none"
                   maxLength={100}
                   value={field.value}
                   onBlur={field.onBlur}

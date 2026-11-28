@@ -47,6 +47,7 @@ jest.mock('@/features/accounts/presentation/hooks', () => ({
   }),
   useCustomer: () => ({
     data: {
+      hasBiometric: true,
       operationAmountMax: 5000,
       operationAmountLabel: 'Hasta $5,000 MXN',
     },
