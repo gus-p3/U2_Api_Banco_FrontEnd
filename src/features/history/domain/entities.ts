@@ -21,7 +21,6 @@ export interface PaymentHistoryItem {
   upc?: string;
   gatewayCode?: string;
   productLegend?: string;
-  claimsInfo?: string;
   message: string;
   createdAt: string;
 }

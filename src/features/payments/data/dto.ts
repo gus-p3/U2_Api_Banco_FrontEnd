@@ -35,7 +35,6 @@ export interface PagoResponseDto {
   idTx?: number;
   upc?: string;
   leyendaProducto?: string;
-  aclaraciones?: string;
   ticketEnviadoCorreo?: boolean;
 }
 
@@ -85,7 +84,6 @@ export interface PagoDetalleDto {
   idTx?: number;
   upc?: string;
   leyendaProducto?: string;
-  aclaraciones?: string;
   fechaEnvio?: string;
   fechaCreacion?: string;
   fechaActualizacion?: string;

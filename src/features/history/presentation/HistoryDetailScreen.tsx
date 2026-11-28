@@ -117,7 +117,9 @@ export function HistoryDetailScreen() {
         />
         <Row label="Cuenta de cargo" value={maskAccount(item.accountNumber)} />
         {item.gatewayCode ? <Row label="Código respuesta GestoPago" value={item.gatewayCode} /> : null}
-        {item.authorization ? <Row label="Folio de autorización" value={item.authorization} /> : null}
+        {item.authorization && item.authorization !== '-1' ? (
+          <Row label="Folio de autorización" value={item.authorization} />
+        ) : null}
         {item.transactionId ? (
           <Row label="ID Transacción (idTx)" value={String(item.transactionId)} />
         ) : null}
@@ -126,18 +128,10 @@ export function HistoryDetailScreen() {
 
         {item.productLegend ? (
           <View style={styles.legendBox}>
-            <Text style={styles.legendTitle}>Leyenda del producto / proveedor</Text>
+            <Text style={styles.legendTitle}>Soporte y aclaraciones</Text>
             <Text style={styles.legendText}>{item.productLegend}</Text>
           </View>
         ) : null}
-
-        <View style={styles.claimsBox}>
-          <Text style={styles.claimsTitle}>¿Dónde puedo reclamar o solicitar una aclaración?</Text>
-          <Text style={styles.claimsText}>
-            {item.claimsInfo ??
-              'Comunícate a la Unidad Especializada de Atención a Usuarios (UNE) de Banco Digital al 800-000-2262 o a aclaraciones@bancodigital.com presentando tu folio UPC y número de autorización. También puedes acudir a CONDUSEF (55 5340 0999 · www.condusef.gob.mx).'}
-          </Text>
-        </View>
 
         {item.status === 'POR_CONFIRMAR' || item.status === 'PENDIENTE' ? (
           <Button
@@ -206,14 +200,4 @@ const styles = StyleSheet.create({
   },
   legendTitle: { ...typography.caption, color: colors.text, fontWeight: '700' },
   legendText: { ...typography.caption, color: colors.textMuted, lineHeight: 18 },
-  claimsBox: {
-    backgroundColor: colors.warningBg,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.warning,
-    borderRadius: radii.sm,
-    padding: spacing.md,
-    gap: 4,
-  },
-  claimsTitle: { ...typography.caption, color: colors.warning, fontWeight: '700' },
-  claimsText: { ...typography.caption, color: colors.text, lineHeight: 18 },
 });

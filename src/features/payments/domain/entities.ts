@@ -79,7 +79,6 @@ export interface PaymentReceipt {
   destination: string;
   accountNumber: string;
   productLegend?: string;
-  claimsInfo?: string;
   emailSent?: boolean;
   createdAt: string;
 }

@@ -27,17 +27,25 @@ export interface ScreenProps {
 export function Screen({ children, scroll = true, refreshing, onRefresh, contentStyle }: ScreenProps) {
   const insets = useSafeAreaInsets();
   const hasHeader = useContext(HeaderPresentContext);
-  const padding = {
-    paddingTop: (hasHeader ? 0 : insets.top) + spacing.md,
+  const topInsetStyle = hasHeader ? undefined : { paddingTop: insets.top };
+  const scrollPadding = {
+    paddingTop: spacing.md,
     paddingBottom: insets.bottom + spacing.xl,
+  };
+  const fixedPadding = {
+    paddingTop: spacing.md,
+    paddingBottom: 0,
   };
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView
+      style={[styles.flex, topInsetStyle]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       {scroll ? (
         <ScrollView
           style={styles.flex}
-          contentContainerStyle={[styles.content, padding, contentStyle]}
+          contentContainerStyle={[styles.content, scrollPadding, contentStyle]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           showsVerticalScrollIndicator={false}
@@ -54,7 +62,7 @@ export function Screen({ children, scroll = true, refreshing, onRefresh, content
           {children}
         </ScrollView>
       ) : (
-        <View style={[styles.content, styles.flex, padding, contentStyle]}>{children}</View>
+        <View style={[styles.content, styles.flex, fixedPadding, contentStyle]}>{children}</View>
       )}
     </KeyboardAvoidingView>
   );

@@ -131,7 +131,6 @@ export function toReceipt(dto: PagoResponseDto, input: PaymentInput): PaymentRec
     destination: input.kind === 'RECARGA' ? (input.phone ?? '') : (input.reference ?? ''),
     accountNumber: input.accountNumber,
     productLegend: dto.leyendaProducto ?? input.product.description,
-    claimsInfo: dto.aclaraciones,
     emailSent: dto.ticketEnviadoCorreo,
     createdAt: new Date().toISOString(),
   };
@@ -158,7 +157,6 @@ export function toReceiptFromDetail(dto: PagoDetalleDto, prev?: PaymentReceipt):
         : (dto.referencia ?? dto.destinoEnmascarado ?? prev?.destination ?? ''),
     accountNumber: dto.numCuenta || prev?.accountNumber || '',
     productLegend: dto.leyendaProducto ?? prev?.productLegend,
-    claimsInfo: dto.aclaraciones ?? prev?.claimsInfo,
     emailSent: prev?.emailSent,
     createdAt: dto.fechaCreacion ?? dto.fechaEnvio ?? prev?.createdAt ?? new Date().toISOString(),
   };
