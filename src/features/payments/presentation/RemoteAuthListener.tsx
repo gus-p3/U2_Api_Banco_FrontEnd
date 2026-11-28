@@ -49,7 +49,6 @@ async function setupMobileNotifications(
         name: 'Autorización de pagos y accesos',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
-        sound: 'default',
       });
     }
 
@@ -113,7 +112,7 @@ async function triggerLocalAuthNotification(auth: PagoAutorizacionDto): Promise<
       content: {
         title: 'Autoriza tu pago desde Web',
         body: `Confirma con tu huella el pago de ${formatCurrency(auth.monto)} en ${auth.nombreServicio}.`,
-        sound: 'default',
+        sound: true,
         data: {
           type: 'PAYMENT_AUTHORIZATION',
           autorizacionId: auth.idAutorizacion,
@@ -134,7 +133,7 @@ async function triggerLocalLogin2faNotification(loginReq: PendingLogin2faDto): P
       content: {
         title: '¿Autorizas inicio de sesión en Web?',
         body: `Confirma con tu huella el acceso web para ${loginReq.email}.`,
-        sound: 'default',
+        sound: true,
         data: {
           type: 'LOGIN_2FA',
           challengeId: loginReq.challengeId,
