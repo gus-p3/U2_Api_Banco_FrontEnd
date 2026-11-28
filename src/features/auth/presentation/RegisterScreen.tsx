@@ -1,31 +1,35 @@
 import { Ionicons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View } from 'react-native';
 
-const sanitizeLettersOnly = (txt: string) => txt.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]/g, '');
-const sanitizeCurp = (txt: string) => txt.toUpperCase().replace(/[^A-Z0-9]/g, '');
-const sanitizeRfc = (txt: string) => txt.toUpperCase().replace(/[^A-ZÑ0-9]/g, '');
-
 import { toAppError } from '@/core/errors/toAppError';
 import { http } from '@/core/http/client';
+import { calculateCurp, calculateRfc } from '@/core/utils/curpRfc';
+import { sanitizeDecimalAmount } from '@/core/validation/validators';
 import {
   useGenders,
   useMaritalStatuses,
   useMunicipalities,
   useNationalities,
+  useOperationAmounts,
+  useProfessions,
   useStates,
 } from '@/features/catalogs/presentation/hooks';
 import { colors, radii, spacing, typography } from '@/shared/theme';
 import { BirthDatePickerField, Button, Card, Input, Screen, SelectField } from '@/shared/ui';
 
-import { toAuthChallenge } from '../data/mappers';
 import type { AuthResponseDto } from '../data/dto';
+import { toAuthChallenge } from '../data/mappers';
 import type { AuthChallenge } from '../domain/entities';
 import { send2faEmailCode, signInWithPasswordChallenge, verifyEmailOrLoginCode } from './authActions';
 import { type RegisterFormValues, registerSchema } from './registerSchema';
+
+const sanitizeLettersOnly = (txt: string) => txt.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]/g, '');
+const sanitizeCurp = (txt: string) => txt.toUpperCase().replace(/[^A-Z0-9]/g, '');
+const sanitizeRfc = (txt: string) => txt.toUpperCase().replace(/[^A-ZÑ&0-9]/g, '');
 
 const STEPS: Array<{
   title: string;
@@ -35,11 +39,21 @@ const STEPS: Array<{
   {
     title: 'Datos personales',
     subtitle: 'Cuéntanos sobre ti. Debes ser mayor de 18 años.',
-    fields: ['name', 'lastName', 'birthDate', 'idGender', 'idNationality', 'idMaritalStatus'],
+    fields: [
+      'name',
+      'secondName',
+      'lastName',
+      'secondLastName',
+      'birthDate',
+      'idGender',
+      'birthStateCode',
+      'idNationality',
+      'idMaritalStatus',
+    ],
   },
   {
     title: 'Identificación y contacto',
-    subtitle: 'Usaremos estos datos para validar tu identidad y contactarte.',
+    subtitle: 'Calculamos tu CURP y RFC automáticamente; revísalos y completa tu contacto.',
     fields: ['curp', 'rfc', 'email', 'mobilePhone'],
   },
   {
@@ -48,9 +62,16 @@ const STEPS: Array<{
     fields: ['claveEntidad', 'idMunicipality', 'street', 'exteriorNumber', 'neighborhood', 'postalCode'],
   },
   {
-    title: 'Empleo y seguridad',
+    title: 'Empleo, monto de operación y seguridad',
     subtitle: 'Último paso para activar tu cuenta bancaria digital.',
-    fields: ['occupation', 'company', 'monthlyIncome', 'password', 'confirmPassword'],
+    fields: [
+      'idProfession',
+      'company',
+      'idOperationAmount',
+      'monthlyIncome',
+      'password',
+      'confirmPassword',
+    ],
   },
 ];
 
@@ -64,11 +85,17 @@ export function RegisterScreen() {
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [resendingCode, setResendingCode] = useState(false);
   const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
+  const [autoCalcBanner, setAutoCalcBanner] = useState<string | null>(null);
+
+  const curpManuallyEditedRef = useRef(false);
+  const rfcManuallyEditedRef = useRef(false);
 
   const genders = useGenders();
   const nationalities = useNationalities();
   const marital = useMaritalStatuses();
   const states = useStates();
+  const professions = useProfessions();
+  const operationAmounts = useOperationAmounts();
 
   const {
     control,
@@ -80,12 +107,15 @@ export function RegisterScreen() {
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
-    mode: 'onTouched',
+    mode: 'onChange',
     reValidateMode: 'onChange',
     defaultValues: {
       name: '',
+      secondName: '',
       lastName: '',
+      secondLastName: '',
       birthDate: '',
+      birthStateCode: '',
       curp: '',
       rfc: '',
       idGender: 0,
@@ -99,7 +129,9 @@ export function RegisterScreen() {
       claveEntidad: '',
       idMunicipality: 0,
       postalCode: '',
+      idProfession: 0,
       occupation: '',
+      idOperationAmount: 0,
       company: '',
       monthlyIncome: '',
       password: '',
@@ -107,6 +139,13 @@ export function RegisterScreen() {
     },
   });
 
+  const watchedName = watch('name');
+  const watchedSecondName = watch('secondName');
+  const watchedLastName = watch('lastName');
+  const watchedSecondLastName = watch('secondLastName');
+  const watchedBirthDate = watch('birthDate');
+  const watchedGenderId = watch('idGender');
+  const watchedBirthStateCode = watch('birthStateCode');
   const selectedState = watch('claveEntidad');
   const passwordValue = watch('password');
   const confirmPasswordValue = watch('confirmPassword');
@@ -146,10 +185,94 @@ export function RegisterScreen() {
     () => (states.data ?? []).map((s) => ({ value: s.code, label: s.name })),
     [states.data],
   );
+  const birthStateOptions = useMemo(
+    () => [...stateOptions, { value: 'NE', label: 'Nacido en el extranjero (NE)' }],
+    [stateOptions],
+  );
   const municipalityOptions = useMemo(
     () => (municipalities.data ?? []).map((m) => ({ value: m.id, label: m.name })),
     [municipalities.data],
   );
+  const professionOptions = useMemo(
+    () => (professions.data ?? []).map((p) => ({ value: p.id, label: p.name })),
+    [professions.data],
+  );
+  const operationAmountOptions = useMemo(
+    () => (operationAmounts.data ?? []).map((r) => ({ value: r.id, label: r.label })),
+    [operationAmounts.data],
+  );
+
+  const selectedGenderName = useMemo(
+    () => genders.data?.find((g) => g.id === watchedGenderId)?.name,
+    [genders.data, watchedGenderId],
+  );
+
+  // Recalcula CURP y RFC automáticamente al cambiar los datos personales (salvo edición manual)
+  useEffect(() => {
+    const calcInput = {
+      firstName: watchedName,
+      secondName: watchedSecondName,
+      lastName: watchedLastName,
+      secondLastName: watchedSecondLastName,
+      birthDate: watchedBirthDate,
+      genderName: selectedGenderName,
+      birthStateCode: watchedBirthStateCode,
+    };
+
+    let updated = false;
+    if (!curpManuallyEditedRef.current) {
+      const nextCurp = calculateCurp(calcInput);
+      if (nextCurp) {
+        setValue('curp', nextCurp, { shouldValidate: step >= 1 });
+        updated = true;
+      }
+    }
+    if (!rfcManuallyEditedRef.current) {
+      const nextRfc = calculateRfc(calcInput);
+      if (nextRfc) {
+        setValue('rfc', nextRfc, { shouldValidate: step >= 1 });
+        updated = true;
+      }
+    }
+    if (updated) {
+      setAutoCalcBanner(
+        'CURP y RFC calculados automáticamente con tus datos personales. Puedes ajustarlos si tu homoclave oficial difiere.',
+      );
+    }
+  }, [
+    watchedName,
+    watchedSecondName,
+    watchedLastName,
+    watchedSecondLastName,
+    watchedBirthDate,
+    selectedGenderName,
+    watchedBirthStateCode,
+    setValue,
+    step,
+  ]);
+
+  const handleRecalculateIdentity = () => {
+    curpManuallyEditedRef.current = false;
+    rfcManuallyEditedRef.current = false;
+    const calcInput = {
+      firstName: watchedName,
+      secondName: watchedSecondName,
+      lastName: watchedLastName,
+      secondLastName: watchedSecondLastName,
+      birthDate: watchedBirthDate,
+      genderName: selectedGenderName,
+      birthStateCode: watchedBirthStateCode,
+    };
+    const nextCurp = calculateCurp(calcInput);
+    const nextRfc = calculateRfc(calcInput);
+    if (nextCurp) setValue('curp', nextCurp, { shouldValidate: true, shouldTouch: true });
+    if (nextRfc) setValue('rfc', nextRfc, { shouldValidate: true, shouldTouch: true });
+    setAutoCalcBanner(
+      nextCurp || nextRfc
+        ? 'CURP y RFC recalculados automáticamente.'
+        : 'Completa tus datos del Paso 1 para calcular CURP y RFC.',
+    );
+  };
 
   const currentStep = STEPS[step] ?? STEPS[0]!;
 
@@ -169,7 +292,8 @@ export function RegisterScreen() {
   const onSubmit = async (v: RegisterFormValues) => {
     setServerError(null);
     try {
-      const body = {
+      const selectedProf = professions.data?.find((p) => p.id === v.idProfession);
+      const body: Record<string, string | number> = {
         name: v.name.trim(),
         lastName: v.lastName.trim(),
         birthDate: v.birthDate.trim(),
@@ -186,12 +310,21 @@ export function RegisterScreen() {
         idMunicipality: v.idMunicipality,
         claveEntidad: v.claveEntidad.trim(),
         postalCode: v.postalCode.trim(),
-        occupation: v.occupation.trim(),
+        idProfession: v.idProfession,
+        occupation: selectedProf?.name ?? v.occupation.trim(),
+        idOperationAmount: v.idOperationAmount,
         company: v.company.trim(),
         monthlyIncome: Number(v.monthlyIncome),
         initialBalance: 1000,
         password: v.password,
       };
+      if (v.secondName.trim()) {
+        body.secondName = v.secondName.trim();
+      }
+      if (v.secondLastName.trim()) {
+        body.secondLastName = v.secondLastName.trim();
+      }
+
       const { data } = await http.post<{ auth?: AuthResponseDto }>('/v1/clientes', body, {
         skipAuth: true,
       });
@@ -273,6 +406,8 @@ export function RegisterScreen() {
             label="Código de verificación (6 dígitos)"
             placeholder="000000"
             keyboardType="number-pad"
+            autoComplete="one-time-code"
+            textContentType="oneTimeCode"
             maxLength={6}
             value={verificationCode}
             onBlur={() => setCodeTouched(true)}
@@ -338,9 +473,10 @@ export function RegisterScreen() {
               name="name"
               render={({ field }) => (
                 <Input
-                  label="Nombre(s)"
+                  label="Primer nombre"
                   placeholder="Ej. Alejandro"
-                  maxLength={50}
+                  autoCapitalize="words"
+                  maxLength={62}
                   value={field.value}
                   onBlur={field.onBlur}
                   onChangeText={(txt) => field.onChange(sanitizeLettersOnly(txt))}
@@ -350,16 +486,51 @@ export function RegisterScreen() {
             />
             <Controller
               control={control}
+              name="secondName"
+              render={({ field }) => (
+                <Input
+                  label="Segundo nombre (opcional)"
+                  placeholder="Ej. Guadalupe"
+                  autoCapitalize="words"
+                  maxLength={62}
+                  value={field.value}
+                  onBlur={field.onBlur}
+                  onChangeText={(txt) => field.onChange(sanitizeLettersOnly(txt))}
+                  error={errors.secondName?.message}
+                  hint="Opcional · Hasta 62 caracteres."
+                />
+              )}
+            />
+            <Controller
+              control={control}
               name="lastName"
               render={({ field }) => (
                 <Input
-                  label="Apellidos"
+                  label="Apellido paterno"
                   placeholder="Ej. Hernández"
-                  maxLength={50}
+                  autoCapitalize="words"
+                  maxLength={62}
                   value={field.value}
                   onBlur={field.onBlur}
                   onChangeText={(txt) => field.onChange(sanitizeLettersOnly(txt))}
                   error={errors.lastName?.message}
+                />
+              )}
+            />
+            <Controller
+              control={control}
+              name="secondLastName"
+              render={({ field }) => (
+                <Input
+                  label="Apellido materno (opcional)"
+                  placeholder="Ej. García"
+                  autoCapitalize="words"
+                  maxLength={62}
+                  value={field.value}
+                  onBlur={field.onBlur}
+                  onChangeText={(txt) => field.onChange(sanitizeLettersOnly(txt))}
+                  error={errors.secondLastName?.message}
+                  hint="Opcional · Hasta 62 caracteres."
                 />
               )}
             />
@@ -390,6 +561,18 @@ export function RegisterScreen() {
               error={errors.idGender?.message}
             />
             <SelectField
+              label="Entidad de nacimiento (para calcular CURP)"
+              placeholder="Selecciona el estado donde naciste"
+              value={watchedBirthStateCode || null}
+              options={birthStateOptions}
+              loading={states.isLoading}
+              searchable
+              onSelect={(code) => {
+                setValue('birthStateCode', code, { shouldValidate: true, shouldTouch: true });
+              }}
+              error={errors.birthStateCode?.message}
+            />
+            <SelectField
               label="Nacionalidad"
               placeholder="Selecciona tu nacionalidad"
               value={watch('idNationality') || null}
@@ -417,6 +600,13 @@ export function RegisterScreen() {
 
         {step === 1 ? (
           <>
+            {autoCalcBanner ? (
+              <View style={styles.autoCalcBox}>
+                <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
+                <Text style={styles.autoCalcText}>{autoCalcBanner}</Text>
+              </View>
+            ) : null}
+
             <Controller
               control={control}
               name="curp"
@@ -425,11 +615,18 @@ export function RegisterScreen() {
                   label="CURP (18 caracteres)"
                   placeholder="HERA950515HDFRND01"
                   autoCapitalize="characters"
+                  autoComplete="off"
+                  importantForAutofill="no"
+                  textContentType="none"
                   maxLength={18}
                   value={field.value}
                   onBlur={field.onBlur}
-                  onChangeText={(txt) => field.onChange(sanitizeCurp(txt))}
+                  onChangeText={(txt) => {
+                    curpManuallyEditedRef.current = true;
+                    field.onChange(sanitizeCurp(txt));
+                  }}
                   error={errors.curp?.message}
+                  hint="Calculada automáticamente; puedes editar los últimos 2 dígitos si aplica."
                 />
               )}
             />
@@ -441,13 +638,25 @@ export function RegisterScreen() {
                   label="RFC (12 o 13 caracteres)"
                   placeholder="HERA950515ABC"
                   autoCapitalize="characters"
+                  autoComplete="off"
+                  importantForAutofill="no"
+                  textContentType="none"
                   maxLength={13}
                   value={field.value}
                   onBlur={field.onBlur}
-                  onChangeText={(txt) => field.onChange(sanitizeRfc(txt))}
+                  onChangeText={(txt) => {
+                    rfcManuallyEditedRef.current = true;
+                    field.onChange(sanitizeRfc(txt));
+                  }}
                   error={errors.rfc?.message}
+                  hint="Calculado con homoclave estimada; ajústalo si ya cuentas con constancia SAT."
                 />
               )}
+            />
+            <Button
+              title="Recalcular CURP y RFC automáticamente"
+              variant="outline"
+              onPress={handleRecalculateIdentity}
             />
             <Controller
               control={control}
@@ -456,6 +665,8 @@ export function RegisterScreen() {
                 <Input
                   label="Correo electrónico"
                   keyboardType="email-address"
+                  autoComplete="email"
+                  textContentType="emailAddress"
                   placeholder="correo@ejemplo.com"
                   maxLength={100}
                   value={field.value}
@@ -495,7 +706,6 @@ export function RegisterScreen() {
               searchable
               onSelect={(code) => {
                 setValue('claveEntidad', code, { shouldValidate: true, shouldTouch: true });
-                // Reinicia municipio sin disparar validación prematura antes de que el usuario elija
                 setValue('idMunicipality', 0, {
                   shouldValidate: false,
                   shouldDirty: false,
@@ -543,7 +753,7 @@ export function RegisterScreen() {
                 <Input
                   label="Número exterior"
                   placeholder="123"
-                  maxLength={20}
+                  maxLength={10}
                   value={field.value}
                   onBlur={field.onBlur}
                   onChangeText={field.onChange}
@@ -558,7 +768,7 @@ export function RegisterScreen() {
                 <Input
                   label="Colonia"
                   placeholder="Juárez"
-                  maxLength={100}
+                  maxLength={80}
                   value={field.value}
                   onBlur={field.onBlur}
                   onChangeText={field.onChange}
@@ -587,27 +797,26 @@ export function RegisterScreen() {
 
         {step === 3 ? (
           <>
-            <Controller
-              control={control}
-              name="occupation"
-              render={({ field }) => (
-                <Input
-                  label="Ocupación"
-                  placeholder="Ingeniero de software"
-                  maxLength={80}
-                  value={field.value}
-                  onBlur={field.onBlur}
-                  onChangeText={(txt) => field.onChange(sanitizeLettersOnly(txt))}
-                  error={errors.occupation?.message}
-                />
-              )}
+            <SelectField
+              label="Profesión / Ocupación"
+              placeholder="Selecciona tu profesión"
+              value={watch('idProfession') || null}
+              options={professionOptions}
+              loading={professions.isLoading}
+              searchable
+              onSelect={(id) => {
+                setValue('idProfession', id, { shouldValidate: true, shouldTouch: true });
+                const found = professions.data?.find((p) => p.id === id);
+                if (found) setValue('occupation', found.name, { shouldValidate: true });
+              }}
+              error={errors.idProfession?.message}
             />
             <Controller
               control={control}
               name="company"
               render={({ field }) => (
                 <Input
-                  label="Empresa"
+                  label="Empresa o lugar de trabajo"
                   placeholder="Tecnología MX"
                   maxLength={100}
                   value={field.value}
@@ -617,6 +826,21 @@ export function RegisterScreen() {
                 />
               )}
             />
+            <SelectField
+              label="Monto de operación (rango mensual y límite por pago)"
+              placeholder="Selecciona un rango de $5,000 en $5,000"
+              value={watch('idOperationAmount') || null}
+              options={operationAmountOptions}
+              loading={operationAmounts.isLoading}
+              onSelect={(id) => {
+                setValue('idOperationAmount', id, { shouldValidate: true, shouldTouch: true });
+              }}
+              error={errors.idOperationAmount?.message}
+            />
+            <Text style={styles.helperNote}>
+              Define tu perfil transaccional (CNBV) y el tope máximo permitido por operación en pagos.
+              Podrás cambiarlo después en tu Perfil.
+            </Text>
             <Controller
               control={control}
               name="monthlyIncome"
@@ -627,7 +851,7 @@ export function RegisterScreen() {
                   placeholder="25000"
                   value={field.value}
                   onBlur={field.onBlur}
-                  onChangeText={(txt) => field.onChange(txt.replace(/[^0-9.]/g, ''))}
+                  onChangeText={(txt) => field.onChange(sanitizeDecimalAmount(txt))}
                   error={errors.monthlyIncome?.message}
                 />
               )}
@@ -640,6 +864,8 @@ export function RegisterScreen() {
                   label="Contraseña"
                   placeholder="Mínimo 12 caracteres"
                   secureTextEntry
+                  autoComplete="new-password"
+                  textContentType="newPassword"
                   maxLength={100}
                   value={field.value}
                   onBlur={field.onBlur}
@@ -671,6 +897,8 @@ export function RegisterScreen() {
                   label="Confirmar contraseña"
                   placeholder="Vuelve a escribir tu contraseña"
                   secureTextEntry
+                  autoComplete="new-password"
+                  textContentType="newPassword"
                   maxLength={100}
                   value={field.value}
                   onBlur={field.onBlur}
@@ -751,6 +979,16 @@ const styles = StyleSheet.create({
   card: { gap: spacing.md, marginBottom: spacing.md },
   section: { ...typography.heading, color: colors.text },
   subtitle: { ...typography.caption, color: colors.textMuted, marginTop: -spacing.xs },
+  helperNote: { ...typography.caption, color: colors.textMuted, marginTop: -spacing.xs },
+  autoCalcBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radii.md,
+    padding: spacing.md,
+  },
+  autoCalcText: { ...typography.caption, color: colors.primary, flex: 1, lineHeight: 18 },
   serverError: { ...typography.caption, color: colors.danger },
   checklistBox: {
     backgroundColor: colors.surfaceMuted,

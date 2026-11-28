@@ -40,3 +40,17 @@ export const useMaritalStatuses = () =>
     queryFn: () => catalogsRepository.getMaritalStatuses(),
     staleTime: DAY,
   });
+
+export const useProfessions = () =>
+  useQuery({
+    queryKey: ['catalogs', 'professions'],
+    queryFn: () => catalogsRepository.getProfessions(),
+    staleTime: DAY,
+  });
+
+export const useOperationAmounts = () =>
+  useQuery({
+    queryKey: ['catalogs', 'operationAmounts'],
+    queryFn: () => catalogsRepository.getOperationAmounts(),
+    staleTime: DAY,
+  });

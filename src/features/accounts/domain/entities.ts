@@ -24,6 +24,9 @@ export interface Movement {
 export interface Customer {
   fullName: string;
   firstName: string;
+  secondName?: string;
+  lastName?: string;
+  secondLastName?: string;
   email?: string;
   mobilePhone?: string;
   alternativePhone?: string;
@@ -50,6 +53,11 @@ export interface Customer {
   stateName?: string;
   postalCode?: string;
   occupation?: string;
+  professionId?: number;
+  professionName?: string;
+  operationAmountId?: number;
+  operationAmountLabel?: string;
+  operationAmountMax?: number;
   company?: string;
   monthlyIncome?: number;
 }

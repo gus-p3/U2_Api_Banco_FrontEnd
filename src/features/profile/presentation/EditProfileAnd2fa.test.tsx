@@ -26,8 +26,11 @@ jest.mock('@/features/accounts/presentation/hooks', () => ({
     isError: false,
     refetch: jest.fn(),
     data: {
-      fullName: 'Brandon Gustavo Pérez',
+      fullName: 'Brandon Gustavo Pérez López',
       firstName: 'Brandon',
+      secondName: 'Gustavo',
+      lastName: 'Pérez',
+      secondLastName: 'López',
       email: 'brandon@banco.com',
       mobilePhone: '5512345678',
       alternativePhone: '',
@@ -51,7 +54,12 @@ jest.mock('@/features/accounts/presentation/hooks', () => ({
       stateCode: '14',
       stateName: 'Jalisco',
       postalCode: '44160',
-      occupation: 'Ingeniero',
+      occupation: 'Desarrollador(a) / Ingeniero(a) de software',
+      professionId: 1,
+      professionName: 'Desarrollador(a) / Ingeniero(a) de software',
+      operationAmountId: 2,
+      operationAmountLabel: '$5,001 a $10,000 MXN',
+      operationAmountMax: 10000,
       company: 'Banco Digital',
       monthlyIncome: 30000,
     },
@@ -83,6 +91,14 @@ jest.mock('@/features/catalogs/presentation/hooks', () => ({
   }),
   useMunicipalities: (code?: string) => ({
     data: code === '14' ? [{ id: 201, stateId: 14, code: '039', name: 'Guadalajara' }] : [],
+    isLoading: false,
+  }),
+  useProfessions: () => ({
+    data: [{ id: 1, name: 'Desarrollador(a) / Ingeniero(a) de software' }],
+    isLoading: false,
+  }),
+  useOperationAmounts: () => ({
+    data: [{ id: 2, label: '$5,001 a $10,000 MXN', minAmount: 5000.01, maxAmount: 10000 }],
     isLoading: false,
   }),
 }));

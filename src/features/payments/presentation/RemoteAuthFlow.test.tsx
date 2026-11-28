@@ -45,6 +45,12 @@ jest.mock('@/features/accounts/presentation/hooks', () => ({
       },
     ],
   }),
+  useCustomer: () => ({
+    data: {
+      operationAmountMax: 5000,
+      operationAmountLabel: 'Hasta $5,000 MXN',
+    },
+  }),
 }));
 
 const mockConfirmFingerprint = jest.fn();

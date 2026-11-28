@@ -15,6 +15,8 @@ export const errorMessages: Record<ApiErrorCode, string> = {
   STATE_MISMATCH: 'El estado no coincide con el municipio seleccionado.',
   BUSINESS_VALIDATION: 'No pudimos completar la operación por una regla del banco.',
   INSUFFICIENT_FUNDS: 'Saldo insuficiente para realizar el pago.',
+  OPERATION_LIMIT_EXCEEDED:
+    'El monto supera tu límite de operación configurado. Puedes ajustarlo en tu perfil.',
   PAYMENT_ACCOUNT_INACTIVE: 'La cuenta no está activa para realizar pagos.',
   PAYMENT_PRODUCT_MISMATCH: 'El producto elegido no corresponde al tipo de pago.',
   REFERENCE_NOT_VALIDATED: 'Debes validar la referencia del servicio antes de realizar el pago.',

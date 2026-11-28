@@ -17,10 +17,19 @@ export interface Municipality {
   name: string;
 }
 
+export interface OperationAmountRange {
+  id: number;
+  label: string;
+  minAmount: number;
+  maxAmount: number;
+}
+
 export interface CatalogsRepository {
   getGenders(): Promise<CatalogItem[]>;
   getNationalities(): Promise<CatalogItem[]>;
   getMaritalStatuses(): Promise<CatalogItem[]>;
+  getProfessions(): Promise<CatalogItem[]>;
+  getOperationAmounts(): Promise<OperationAmountRange[]>;
   getStates(): Promise<State[]>;
   getMunicipalities(stateCode: string): Promise<Municipality[]>;
 }

@@ -50,5 +50,14 @@ export interface ClientDto {
     stateName?: string;
     postalCode?: string;
   };
-  employmentInformation?: { occupation?: string; company?: string; monthlyIncome?: number };
+  employmentInformation?: {
+    occupation?: string;
+    idProfession?: number;
+    professionName?: string;
+    idOperationAmount?: number;
+    operationAmountLabel?: string;
+    operationAmountMax?: number;
+    company?: string;
+    monthlyIncome?: number;
+  };
 }

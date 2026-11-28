@@ -7,6 +7,19 @@ const SAFE_SEARCH_REGEX = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 .,&\-_/#()]*$
 const ISO_DATE_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DECIMAL_AMOUNT_REGEX = /^\d{1,10}(\.\d{1,2})?$/;
 
+/** Sanitiza montos numéricos permitiendo máximo un punto decimal y 2 decimales. */
+export function sanitizeDecimalAmount(raw: string): string {
+  const cleaned = raw.replace(/[^0-9.]/g, '');
+  const firstDot = cleaned.indexOf('.');
+  if (firstDot === -1) return cleaned.slice(0, 10);
+  const intPart = cleaned.slice(0, firstDot).slice(0, 10);
+  const decPart = cleaned
+    .slice(firstDot + 1)
+    .replace(/\./g, '')
+    .slice(0, 2);
+  return `${intPart}.${decPart}`;
+}
+
 export function parseValidCalendarDate(value: string): Date | null {
   const match = ISO_DATE_REGEX.exec(value.trim());
   if (!match) return null;

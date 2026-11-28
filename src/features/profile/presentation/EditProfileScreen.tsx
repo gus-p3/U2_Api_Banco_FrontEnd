@@ -8,6 +8,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { toAppError } from '@/core/errors/toAppError';
 import { http } from '@/core/http/client';
+import { sanitizeDecimalAmount } from '@/core/validation/validators';
 import { accountKeys, useCustomer } from '@/features/accounts/presentation/hooks';
 import { useSessionStore } from '@/features/auth/presentation/sessionStore';
 import {
@@ -15,11 +16,13 @@ import {
   useMaritalStatuses,
   useMunicipalities,
   useNationalities,
+  useOperationAmounts,
+  useProfessions,
   useStates,
 } from '@/features/catalogs/presentation/hooks';
 import { colors, radii, spacing, typography } from '@/shared/theme';
-import { AppHeader } from '@/shared/ui/AppHeader';
 import { Button, Card, ErrorState, Input, Loader, Screen, SelectField } from '@/shared/ui';
+import { AppHeader } from '@/shared/ui/AppHeader';
 
 import { type EditProfileFormValues, editProfileSchema } from './editProfileSchema';
 
@@ -39,6 +42,8 @@ export function EditProfileScreen() {
   const nationalities = useNationalities();
   const marital = useMaritalStatuses();
   const states = useStates();
+  const professions = useProfessions();
+  const operationAmounts = useOperationAmounts();
 
   const {
     control,
@@ -53,6 +58,10 @@ export function EditProfileScreen() {
     mode: 'onChange',
     reValidateMode: 'onChange',
     defaultValues: {
+      name: '',
+      secondName: '',
+      lastName: '',
+      secondLastName: '',
       email: '',
       mobilePhone: '',
       alternativePhone: '',
@@ -63,7 +72,9 @@ export function EditProfileScreen() {
       interiorNumber: '',
       neighborhood: '',
       postalCode: '',
+      idProfession: 0,
       occupation: '',
+      idOperationAmount: 0,
       company: '',
       monthlyIncome: '',
       idGender: 0,
@@ -75,12 +86,15 @@ export function EditProfileScreen() {
   const selectedStateCode = watch('stateCode');
   const municipalities = useMunicipalities(selectedStateCode || undefined);
 
-  // Hidrata valores base del cliente la primera vez que carga
   useEffect(() => {
     if (!customer || hydratedRef.current) return;
     hydratedRef.current = true;
     reset(
       {
+        name: customer.firstName ?? '',
+        secondName: customer.secondName ?? '',
+        lastName: customer.lastName ?? '',
+        secondLastName: customer.secondLastName ?? '',
         email: customer.email ?? session?.email ?? '',
         mobilePhone: customer.mobilePhone ?? '',
         alternativePhone: customer.alternativePhone ?? '',
@@ -91,7 +105,9 @@ export function EditProfileScreen() {
         interiorNumber: customer.interiorNumber ?? '',
         neighborhood: customer.neighborhood ?? '',
         postalCode: customer.postalCode ?? '',
-        occupation: customer.occupation ?? '',
+        idProfession: customer.professionId ?? 0,
+        occupation: customer.professionName ?? customer.occupation ?? '',
+        idOperationAmount: customer.operationAmountId ?? 0,
         company: customer.company ?? '',
         monthlyIncome: customer.monthlyIncome != null ? String(customer.monthlyIncome) : '',
         idGender: customer.genderId ?? 0,
@@ -102,7 +118,6 @@ export function EditProfileScreen() {
     );
   }, [customer, session?.email, reset]);
 
-  // Fallback por nombre si algún catálogo no llegó con ID en la respuesta
   useEffect(() => {
     if (!customer) return;
     if (!watch('stateCode') && customer.stateName && states.data?.length) {
@@ -153,6 +168,16 @@ export function EditProfileScreen() {
     }
   }, [customer, marital.data, setValue, watch]);
 
+  useEffect(() => {
+    if (!customer) return;
+    if (!watch('idProfession') && customer.occupation && professions.data?.length) {
+      const matched = professions.data.find(
+        (p) => normalizeText(p.name) === normalizeText(customer.occupation),
+      );
+      if (matched) setValue('idProfession', matched.id, { shouldValidate: true });
+    }
+  }, [customer, professions.data, setValue, watch]);
+
   const genderOptions = useMemo(
     () => (genders.data ?? []).map((g) => ({ value: g.id, label: g.name })),
     [genders.data],
@@ -173,6 +198,14 @@ export function EditProfileScreen() {
     () => (municipalities.data ?? []).map((m) => ({ value: m.id, label: m.name })),
     [municipalities.data],
   );
+  const professionOptions = useMemo(
+    () => (professions.data ?? []).map((p) => ({ value: p.id, label: p.name })),
+    [professions.data],
+  );
+  const operationAmountOptions = useMemo(
+    () => (operationAmounts.data ?? []).map((r) => ({ value: r.id, label: r.label })),
+    [operationAmounts.data],
+  );
 
   const onSubmit = async (vals: EditProfileFormValues) => {
     const identificador = customer?.curp ?? customer?.rfc;
@@ -182,6 +215,20 @@ export function EditProfileScreen() {
     }
 
     const body: Record<string, string | number> = { identificador };
+
+    const cleanName = vals.name.trim();
+    if (cleanName !== (customer?.firstName ?? '')) body.name = cleanName;
+
+    const cleanSecondName = vals.secondName.trim();
+    if (cleanSecondName !== (customer?.secondName ?? '')) body.secondName = cleanSecondName;
+
+    const cleanLastName = vals.lastName.trim();
+    if (cleanLastName !== (customer?.lastName ?? '')) body.lastName = cleanLastName;
+
+    const cleanSecondLastName = vals.secondLastName.trim();
+    if (cleanSecondLastName !== (customer?.secondLastName ?? '')) {
+      body.secondLastName = cleanSecondLastName;
+    }
 
     const cleanEmail = vals.email.trim();
     if (cleanEmail !== (customer?.email ?? session?.email ?? '')) body.email = cleanEmail;
@@ -211,8 +258,20 @@ export function EditProfileScreen() {
       body.idMunicipality = vals.idMunicipality;
     }
 
-    const cleanOccupation = vals.occupation.trim();
-    if (cleanOccupation !== (customer?.occupation ?? '')) body.occupation = cleanOccupation;
+    if (vals.idProfession > 0 && vals.idProfession !== (customer?.professionId ?? 0)) {
+      body.idProfession = vals.idProfession;
+      const matchedProf = professions.data?.find((p) => p.id === vals.idProfession);
+      if (matchedProf) body.occupation = matchedProf.name;
+    } else {
+      const cleanOccupation = vals.occupation.trim();
+      if (cleanOccupation && cleanOccupation !== (customer?.occupation ?? '')) {
+        body.occupation = cleanOccupation;
+      }
+    }
+
+    if (vals.idOperationAmount > 0 && vals.idOperationAmount !== (customer?.operationAmountId ?? 0)) {
+      body.idOperationAmount = vals.idOperationAmount;
+    }
 
     const cleanCompany = vals.company.trim();
     if (cleanCompany !== (customer?.company ?? '')) body.company = cleanCompany;
@@ -284,6 +343,74 @@ export function EditProfileScreen() {
             Revisa y actualiza tu información. Los cambios se validan al momento antes de guardar.
           </Text>
         </View>
+
+        <Card style={styles.sectionCard}>
+          <SectionHeader
+            icon="person-outline"
+            title="Nombre completo"
+            subtitle="Primer/segundo nombre y apellidos (hasta 62 caracteres)"
+          />
+          <Controller
+            control={control}
+            name="name"
+            render={({ field }) => (
+              <Input
+                label="Primer nombre"
+                autoCapitalize="words"
+                maxLength={62}
+                value={field.value}
+                onBlur={field.onBlur}
+                onChangeText={(txt) => field.onChange(sanitizeLettersOnly(txt))}
+                error={errors.name?.message}
+              />
+            )}
+          />
+          <Controller
+            control={control}
+            name="secondName"
+            render={({ field }) => (
+              <Input
+                label="Segundo nombre (opcional)"
+                autoCapitalize="words"
+                maxLength={62}
+                value={field.value}
+                onBlur={field.onBlur}
+                onChangeText={(txt) => field.onChange(sanitizeLettersOnly(txt))}
+                error={errors.secondName?.message}
+              />
+            )}
+          />
+          <Controller
+            control={control}
+            name="lastName"
+            render={({ field }) => (
+              <Input
+                label="Apellido paterno"
+                autoCapitalize="words"
+                maxLength={62}
+                value={field.value}
+                onBlur={field.onBlur}
+                onChangeText={(txt) => field.onChange(sanitizeLettersOnly(txt))}
+                error={errors.lastName?.message}
+              />
+            )}
+          />
+          <Controller
+            control={control}
+            name="secondLastName"
+            render={({ field }) => (
+              <Input
+                label="Apellido materno (opcional)"
+                autoCapitalize="words"
+                maxLength={62}
+                value={field.value}
+                onBlur={field.onBlur}
+                onChangeText={(txt) => field.onChange(sanitizeLettersOnly(txt))}
+                error={errors.secondLastName?.message}
+              />
+            )}
+          />
+        </Card>
 
         <Card style={styles.sectionCard}>
           <SectionHeader
@@ -458,22 +585,33 @@ export function EditProfileScreen() {
         <Card style={styles.sectionCard}>
           <SectionHeader
             icon="briefcase-outline"
-            title="Información laboral"
-            subtitle="Actividad económica e ingresos mensuales"
+            title="Información laboral y monto de operación"
+            subtitle="Profesión, ingresos y límite máximo por operación"
           />
-          <Controller
-            control={control}
-            name="occupation"
-            render={({ field }) => (
-              <Input
-                label="Ocupación"
-                maxLength={80}
-                value={field.value}
-                onBlur={field.onBlur}
-                onChangeText={(txt) => field.onChange(sanitizeLettersOnly(txt))}
-                error={errors.occupation?.message}
-              />
-            )}
+          <SelectField
+            label="Profesión / Ocupación"
+            placeholder={customer.professionName ?? customer.occupation ?? 'Selecciona tu profesión'}
+            value={watch('idProfession') || null}
+            options={professionOptions}
+            loading={professions.isLoading}
+            searchable
+            error={errors.idProfession?.message}
+            onSelect={(id) => {
+              setValue('idProfession', id, { shouldValidate: true, shouldTouch: true });
+              const found = professions.data?.find((p) => p.id === id);
+              if (found) setValue('occupation', found.name, { shouldValidate: true });
+            }}
+          />
+          <SelectField
+            label="Monto de operación (rangos de $5,000 MXN)"
+            placeholder={customer.operationAmountLabel ?? 'Selecciona tu límite de operación'}
+            value={watch('idOperationAmount') || null}
+            options={operationAmountOptions}
+            loading={operationAmounts.isLoading}
+            error={errors.idOperationAmount?.message}
+            onSelect={(id) => {
+              setValue('idOperationAmount', id, { shouldValidate: true, shouldTouch: true });
+            }}
           />
           <Controller
             control={control}
@@ -498,7 +636,7 @@ export function EditProfileScreen() {
                 keyboardType="decimal-pad"
                 value={field.value}
                 onBlur={field.onBlur}
-                onChangeText={(txt) => field.onChange(txt.replace(/[^0-9.]/g, ''))}
+                onChangeText={(txt) => field.onChange(sanitizeDecimalAmount(txt))}
                 error={errors.monthlyIncome?.message}
               />
             )}
@@ -507,9 +645,9 @@ export function EditProfileScreen() {
 
         <Card style={styles.sectionCard}>
           <SectionHeader
-            icon="person-outline"
-            title="Datos personales"
-            subtitle="Catálogos de identidad"
+            icon="id-card-outline"
+            title="Catálogos de identidad"
+            subtitle="Género, nacionalidad y estado civil"
           />
           <SelectField
             label="Género"
@@ -571,13 +709,13 @@ function SectionHeader({
   subtitle: string;
 }) {
   return (
-    <View style={styles.secHeader}>
-      <View style={styles.secIconWrap}>
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionIcon}>
         <Ionicons name={icon} size={18} color={colors.primary} />
       </View>
-      <View style={styles.secTexts}>
-        <Text style={styles.secTitle}>{title}</Text>
-        <Text style={styles.secSub}>{subtitle}</Text>
+      <View style={styles.sectionTexts}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <Text style={styles.sectionSubtitle}>{subtitle}</Text>
       </View>
     </View>
   );
@@ -590,21 +728,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     alignSelf: 'flex-start',
+    paddingVertical: spacing.xs,
   },
-  backText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
-  headingBox: { gap: spacing.xs },
+  backText: { ...typography.body, color: colors.primary, fontWeight: '600' },
+  headingBox: { gap: 4 },
   title: { ...typography.title, color: colors.text },
-  subtitle: { ...typography.body, color: colors.textMuted },
+  subtitle: { ...typography.caption, color: colors.textMuted },
   sectionCard: { gap: spacing.md },
-  secHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingBottom: spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  secIconWrap: {
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  sectionIcon: {
     width: 36,
     height: 36,
     borderRadius: radii.md,
@@ -612,10 +744,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  secTexts: { flex: 1 },
-  secTitle: { ...typography.subheading, color: colors.text, fontWeight: '700' },
-  secSub: { ...typography.caption, color: colors.textMuted },
-  rowPair: { flexDirection: 'row', gap: spacing.md },
+  sectionTexts: { flex: 1, gap: 2 },
+  sectionTitle: { ...typography.subheading, color: colors.text, fontWeight: '700' },
+  sectionSubtitle: { ...typography.caption, color: colors.textMuted },
+  rowPair: { flexDirection: 'row', gap: spacing.sm },
   halfCol: { flex: 1 },
   errorBox: {
     backgroundColor: colors.dangerBg,
@@ -625,5 +757,5 @@ const styles = StyleSheet.create({
     borderColor: '#FECACA',
   },
   errorText: { ...typography.caption, color: colors.danger, fontWeight: '600' },
-  actions: { gap: spacing.sm },
+  actions: { gap: spacing.sm, marginTop: spacing.xs },
 });

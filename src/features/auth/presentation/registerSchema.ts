@@ -5,11 +5,12 @@ import { validateAdultBirthDate } from '@/core/validation/validators';
 import { EMAIL_REGEX, PASSWORD_REGEX } from './loginSchema';
 
 /**
- * Espejo 1 a 1 de ClientOnboardingRequest (backend): mismas reglas, longitudes, patrones y mensajes.
- * La mayoría de edad la valida el backend en ClientServiceImpl (INVALID_AGE); aquí se replica.
+ * Espejo 1 a 1 de ClientOnboardingRequest (backend): mismas reglas, longitudes (hasta 62 chars
+ * en nombres/apellidos), patrones y mensajes.
  */
-export const NAME_REGEX = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]{2,50}$/;
-export const OCCUPATION_REGEX = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]{2,80}$/;
+export const NAME_REGEX = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]{2,62}$/;
+export const OPTIONAL_NAME_REGEX = /^$|^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]{2,62}$/;
+export const OCCUPATION_REGEX = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 /()-]{2,80}$/;
 export const CURP_REGEX = /^[A-Z]{4}[0-9]{6}[HM][A-Z]{2}[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9][0-9]$/;
 export const RFC_REGEX = /^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$/;
 export const INCOME_REGEX = /^\d{1,10}(\.\d{1,2})?$/;
@@ -21,17 +22,27 @@ const registerBaseSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(1, 'El nombre es obligatorio')
-    .min(2, 'El nombre debe tener entre 2 y 50 caracteres')
-    .max(50, 'El nombre debe tener entre 2 y 50 caracteres')
-    .regex(NAME_REGEX, 'El nombre contiene caracteres no válidos'),
+    .min(1, 'El primer nombre es obligatorio')
+    .min(2, 'El primer nombre debe tener entre 2 y 62 caracteres')
+    .max(62, 'El primer nombre debe tener entre 2 y 62 caracteres')
+    .regex(NAME_REGEX, 'El primer nombre contiene caracteres no válidos'),
+  secondName: z
+    .string()
+    .trim()
+    .max(62, 'El segundo nombre no puede superar 62 caracteres')
+    .regex(OPTIONAL_NAME_REGEX, 'El segundo nombre debe tener entre 2 y 62 letras (o dejarse vacío)'),
   lastName: z
     .string()
     .trim()
     .min(1, 'El apellido paterno es obligatorio')
-    .min(2, 'El apellido paterno debe tener entre 2 y 50 caracteres')
-    .max(50, 'El apellido paterno debe tener entre 2 y 50 caracteres')
+    .min(2, 'El apellido paterno debe tener entre 2 y 62 caracteres')
+    .max(62, 'El apellido paterno debe tener entre 2 y 62 caracteres')
     .regex(NAME_REGEX, 'El apellido paterno contiene caracteres no válidos'),
+  secondLastName: z
+    .string()
+    .trim()
+    .max(62, 'El apellido materno no puede superar 62 caracteres')
+    .regex(OPTIONAL_NAME_REGEX, 'El apellido materno debe tener entre 2 y 62 letras (o dejarse vacío)'),
   birthDate: z
     .string()
     .trim()
@@ -39,6 +50,7 @@ const registerBaseSchema = z.object({
       const err = validateAdultBirthDate(val);
       if (err) ctx.addIssue({ code: 'custom', message: err });
     }),
+  birthStateCode: z.string().trim().min(1, 'Selecciona tu entidad de nacimiento para calcular tu CURP'),
   curp: z
     .string()
     .trim()
@@ -54,9 +66,9 @@ const registerBaseSchema = z.object({
     .min(12, 'El RFC debe tener 12 o 13 caracteres')
     .max(13, 'El RFC debe tener 12 o 13 caracteres')
     .regex(RFC_REGEX, 'El formato del RFC es inválido'),
-  idGender: z.number().int().positive('El identificador del género debe ser positivo'),
-  idNationality: z.number().int().positive('El identificador de la nacionalidad debe ser positivo'),
-  idMaritalStatus: z.number().int().positive('El identificador del estado civil debe ser positivo'),
+  idGender: z.number().int().positive('Selecciona tu género'),
+  idNationality: z.number().int().positive('Selecciona tu nacionalidad'),
+  idMaritalStatus: z.number().int().positive('Selecciona tu estado civil'),
   email: z
     .string()
     .trim()
@@ -83,18 +95,15 @@ const registerBaseSchema = z.object({
     .string()
     .trim()
     .regex(/^[0-9]{2}$/, "La clave de entidad debe tener 2 dígitos numéricos (ej. '09')"),
-  idMunicipality: z.number().int().positive('El identificador del municipio debe ser positivo'),
+  idMunicipality: z.number().int().positive('Selecciona tu municipio o alcaldía'),
   postalCode: z
     .string()
     .trim()
     .min(1, 'El código postal es obligatorio')
     .regex(/^[0-9]{5}$/, 'El código postal debe contener exactamente 5 dígitos numéricos'),
-  occupation: z
-    .string()
-    .trim()
-    .min(1, 'La ocupación es obligatoria')
-    .max(80, 'La ocupación no puede superar los 80 caracteres')
-    .regex(OCCUPATION_REGEX, 'La ocupación solo debe contener letras y espacios'),
+  idProfession: z.number().int().positive('Selecciona tu profesión u ocupación'),
+  occupation: z.string().trim().max(80),
+  idOperationAmount: z.number().int().positive('Selecciona tu rango de monto de operación'),
   company: requiredText(
     'La empresa es obligatoria',
     100,

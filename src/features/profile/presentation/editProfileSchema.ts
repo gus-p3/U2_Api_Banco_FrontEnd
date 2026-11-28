@@ -1,10 +1,39 @@
 import { z } from 'zod';
 
 import { EMAIL_REGEX } from '@/features/auth/presentation/loginSchema';
-import { INCOME_REGEX } from '@/features/auth/presentation/registerSchema';
+import {
+  INCOME_REGEX,
+  NAME_REGEX,
+  OPTIONAL_NAME_REGEX,
+} from '@/features/auth/presentation/registerSchema';
 
 export const editProfileSchema = z
   .object({
+    name: z
+      .string()
+      .trim()
+      .min(2, 'El primer nombre debe tener entre 2 y 62 caracteres')
+      .max(62, 'El primer nombre debe tener entre 2 y 62 caracteres')
+      .regex(NAME_REGEX, 'El primer nombre contiene caracteres no válidos'),
+    secondName: z
+      .string()
+      .trim()
+      .max(62, 'El segundo nombre no puede superar 62 caracteres')
+      .regex(OPTIONAL_NAME_REGEX, 'El segundo nombre debe tener entre 2 y 62 letras (o dejarse vacío)'),
+    lastName: z
+      .string()
+      .trim()
+      .min(2, 'El apellido paterno debe tener entre 2 y 62 caracteres')
+      .max(62, 'El apellido paterno debe tener entre 2 y 62 caracteres')
+      .regex(NAME_REGEX, 'El apellido paterno contiene caracteres no válidos'),
+    secondLastName: z
+      .string()
+      .trim()
+      .max(62, 'El apellido materno no puede superar 62 caracteres')
+      .regex(
+        OPTIONAL_NAME_REGEX,
+        'El apellido materno debe tener entre 2 y 62 letras (o dejarse vacío)',
+      ),
     email: z
       .string()
       .trim()
@@ -45,11 +74,9 @@ export const editProfileSchema = z
       .string()
       .trim()
       .regex(/^[0-9]{5}$/, 'El código postal debe contener exactamente 5 dígitos'),
-    occupation: z
-      .string()
-      .trim()
-      .min(3, 'La ocupación debe tener entre 3 y 80 caracteres')
-      .max(80, 'La ocupación no puede superar 80 caracteres'),
+    idProfession: z.number().int().min(0),
+    occupation: z.string().trim().max(80),
+    idOperationAmount: z.number().int().min(0),
     company: z
       .string()
       .trim()
@@ -73,6 +100,13 @@ export const editProfileSchema = z
         code: 'custom',
         path: ['idMunicipality'],
         message: 'Selecciona tu municipio o alcaldía',
+      });
+    }
+    if (vals.idProfession <= 0 && vals.occupation.length < 3) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['idProfession'],
+        message: 'Selecciona tu profesión u ocupación',
       });
     }
   });

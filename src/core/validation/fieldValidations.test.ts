@@ -11,10 +11,13 @@ import { registerSchema, type RegisterFormValues } from '@/features/auth/present
 
 const VALID_REGISTER: RegisterFormValues = {
   name: 'Alejandro',
+  secondName: 'Carlos',
   lastName: 'Hernández',
+  secondLastName: 'García',
   birthDate: '1995-05-15',
-  curp: 'HERA950515HDFRND01',
-  rfc: 'HERA950515ABC',
+  birthStateCode: '09',
+  curp: 'HEGA950515HDFRRL01',
+  rfc: 'HEGA950515ABC',
   idGender: 1,
   idNationality: 1,
   idMaritalStatus: 1,
@@ -26,7 +29,9 @@ const VALID_REGISTER: RegisterFormValues = {
   claveEntidad: '09',
   idMunicipality: 15,
   postalCode: '06600',
-  occupation: 'Ingeniero de Software',
+  idProfession: 1,
+  occupation: 'Desarrollador(a) / Ingeniero(a) de software',
+  idOperationAmount: 2,
   company: 'Banco Digital SA',
   monthlyIncome: '25000.00',
   password: 'PasswordSegura#2026',
@@ -106,31 +111,38 @@ describe('Validaciones de Registro / Onboarding (paridad 1:1 con ClientOnboardin
     expect(registerSchema.safeParse(VALID_REGISTER).success).toBe(true);
   });
 
-  it('valida name y lastName: obligatorio, 2-50 chars y solo letras/acentos/espacios', () => {
+  it('valida los 4 campos de nombre/apellidos: 2-62 chars y opcionales en segundo nombre y apellido materno', () => {
     expect(fieldError(registerSchema, { ...VALID_REGISTER, name: '' }, 'name')).toBe(
-      'El nombre es obligatorio',
+      'El primer nombre es obligatorio',
     );
     expect(fieldError(registerSchema, { ...VALID_REGISTER, name: 'A' }, 'name')).toBe(
-      'El nombre debe tener entre 2 y 50 caracteres',
+      'El primer nombre debe tener entre 2 y 62 caracteres',
     );
-    expect(fieldError(registerSchema, { ...VALID_REGISTER, name: 'A'.repeat(51) }, 'name')).toBe(
-      'El nombre debe tener entre 2 y 50 caracteres',
+    expect(fieldError(registerSchema, { ...VALID_REGISTER, name: 'A'.repeat(63) }, 'name')).toBe(
+      'El primer nombre debe tener entre 2 y 62 caracteres',
     );
     expect(fieldError(registerSchema, { ...VALID_REGISTER, name: 'Alejandro123' }, 'name')).toBe(
-      'El nombre contiene caracteres no válidos',
+      'El primer nombre contiene caracteres no válidos',
     );
     expect(
-      fieldError(registerSchema, { ...VALID_REGISTER, name: 'José Ángel' }, 'name'),
+      fieldError(registerSchema, { ...VALID_REGISTER, name: 'A'.repeat(62) }, 'name'),
+    ).toBeUndefined();
+    expect(
+      fieldError(
+        registerSchema,
+        { ...VALID_REGISTER, secondName: '', secondLastName: '' },
+        'secondName',
+      ),
     ).toBeUndefined();
 
     expect(fieldError(registerSchema, { ...VALID_REGISTER, lastName: '' }, 'lastName')).toBe(
       'El apellido paterno es obligatorio',
     );
     expect(fieldError(registerSchema, { ...VALID_REGISTER, lastName: 'H' }, 'lastName')).toBe(
-      'El apellido paterno debe tener entre 2 y 50 caracteres',
+      'El apellido paterno debe tener entre 2 y 62 caracteres',
     );
-    expect(fieldError(registerSchema, { ...VALID_REGISTER, lastName: 'H'.repeat(51) }, 'lastName')).toBe(
-      'El apellido paterno debe tener entre 2 y 50 caracteres',
+    expect(fieldError(registerSchema, { ...VALID_REGISTER, lastName: 'H'.repeat(63) }, 'lastName')).toBe(
+      'El apellido paterno debe tener entre 2 y 62 caracteres',
     );
     expect(fieldError(registerSchema, { ...VALID_REGISTER, lastName: 'Hernández$' }, 'lastName')).toBe(
       'El apellido paterno contiene caracteres no válidos',
@@ -188,19 +200,25 @@ describe('Validaciones de Registro / Onboarding (paridad 1:1 con ClientOnboardin
     expect(registerSchema.safeParse({ ...VALID_REGISTER, rfc: 'Ñ&A9505151A2' }).success).toBe(true);
   });
 
-  it('valida catálogos numéricos positivos: idGender, idNationality, idMaritalStatus, idMunicipality', () => {
+  it('valida catálogos numéricos positivos: idGender, idNationality, idMaritalStatus, idMunicipality, idProfession, idOperationAmount', () => {
     expect(fieldError(registerSchema, { ...VALID_REGISTER, idGender: 0 }, 'idGender')).toBe(
-      'El identificador del género debe ser positivo',
+      'Selecciona tu género',
     );
     expect(fieldError(registerSchema, { ...VALID_REGISTER, idNationality: -1 }, 'idNationality')).toBe(
-      'El identificador de la nacionalidad debe ser positivo',
+      'Selecciona tu nacionalidad',
     );
     expect(
       fieldError(registerSchema, { ...VALID_REGISTER, idMaritalStatus: 0 }, 'idMaritalStatus'),
-    ).toBe('El identificador del estado civil debe ser positivo');
+    ).toBe('Selecciona tu estado civil');
     expect(fieldError(registerSchema, { ...VALID_REGISTER, idMunicipality: 0 }, 'idMunicipality')).toBe(
-      'El identificador del municipio debe ser positivo',
+      'Selecciona tu municipio o alcaldía',
     );
+    expect(fieldError(registerSchema, { ...VALID_REGISTER, idProfession: 0 }, 'idProfession')).toBe(
+      'Selecciona tu profesión u ocupación',
+    );
+    expect(
+      fieldError(registerSchema, { ...VALID_REGISTER, idOperationAmount: 0 }, 'idOperationAmount'),
+    ).toBe('Selecciona tu rango de monto de operación');
   });
 
   it('valida contacto: email y mobilePhone (10 dígitos)', () => {
@@ -255,13 +273,13 @@ describe('Validaciones de Registro / Onboarding (paridad 1:1 con ClientOnboardin
     );
   });
 
-  it('valida empleo e ingreso mensual: occupation, company, monthlyIncome y password', () => {
-    expect(fieldError(registerSchema, { ...VALID_REGISTER, occupation: '' }, 'occupation')).toBe(
-      'La ocupación es obligatoria',
+  it('valida empleo e ingreso mensual: idProfession, idOperationAmount, company, monthlyIncome y password', () => {
+    expect(fieldError(registerSchema, { ...VALID_REGISTER, idProfession: 0 }, 'idProfession')).toBe(
+      'Selecciona tu profesión u ocupación',
     );
     expect(
-      fieldError(registerSchema, { ...VALID_REGISTER, occupation: 'O'.repeat(81) }, 'occupation'),
-    ).toBe('La ocupación no puede superar los 80 caracteres');
+      fieldError(registerSchema, { ...VALID_REGISTER, idOperationAmount: 0 }, 'idOperationAmount'),
+    ).toBe('Selecciona tu rango de monto de operación');
 
     expect(fieldError(registerSchema, { ...VALID_REGISTER, company: '' }, 'company')).toBe(
       'La empresa es obligatoria',

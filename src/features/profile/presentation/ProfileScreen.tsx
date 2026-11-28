@@ -93,11 +93,18 @@ export function ProfileScreen() {
             <InfoRow label="Teléfono alternativo" value={customer.alternativePhone} />
           ) : null}
           <InfoRow label="Domicilio" value={customer.address ?? '—'} />
-          <InfoRow label="Ocupación" value={customer.occupation ?? '—'} />
+          <InfoRow
+            label="Profesión / Ocupación"
+            value={customer.professionName ?? customer.occupation ?? '—'}
+          />
           <InfoRow label="Empresa" value={customer.company ?? '—'} />
           {customer.monthlyIncome != null ? (
             <InfoRow label="Ingreso mensual" value={formatCurrency(customer.monthlyIncome)} />
           ) : null}
+          <InfoRow
+            label="Monto de operación (límite)"
+            value={customer.operationAmountLabel ?? 'Sin límite configurado'}
+          />
           {customer.genderName ? <InfoRow label="Género" value={customer.genderName} /> : null}
           {customer.nationalityName ? (
             <InfoRow label="Nacionalidad" value={customer.nationalityName} />

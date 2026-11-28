@@ -39,6 +39,20 @@ jest.mock('@/features/catalogs/presentation/hooks', () => ({
           : [],
     isLoading: false,
   }),
+  useProfessions: () => ({
+    data: [
+      { id: 1, name: 'Desarrollador(a) / Ingeniero(a) de software' },
+      { id: 2, name: 'Comerciante' },
+    ],
+    isLoading: false,
+  }),
+  useOperationAmounts: () => ({
+    data: [
+      { id: 1, label: 'Hasta $5,000 MXN', minAmount: 0.01, maxAmount: 5000 },
+      { id: 2, label: '$5,001 a $10,000 MXN', minAmount: 5000.01, maxAmount: 10000 },
+    ],
+    isLoading: false,
+  }),
 }));
 
 function Wrapper({ children }: { children: React.ReactNode }) {
@@ -57,8 +71,8 @@ function Wrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-describe('RegisterScreen Wizard (calendario >=18, listas de catálogos, sin error prematuro de municipio)', () => {
-  it('avanza paso a paso, abre calendario con años de menores bloqueados y no muestra error de municipio al cambiar estado', async () => {
+describe('RegisterScreen Wizard (4 nombres, auto CURP/RFC, autofill seguro, profesiones y monto operación)', () => {
+  it('avanza los 4 pasos calculando CURP y RFC automáticamente y bloqueando autofill en CURP/RFC', async () => {
     await render(
       <Wrapper>
         <RegisterScreen />
@@ -71,17 +85,23 @@ describe('RegisterScreen Wizard (calendario >=18, listas de catálogos, sin erro
     // Abre calendario y verifica que no ofrece el año actual (menor de edad bloqueado)
     await fireEvent.press(screen.getByRole('button', { name: 'Fecha de nacimiento' }));
     expect(screen.getByText(/Fecha máxima permitida \(18 años\)/)).toBeTruthy();
-    // Selecciona el día 15 del mes mostrado (1995)
     await fireEvent.press(screen.getByText('15'));
 
-    // Llena paso 1 usando listas desplegables (nombre bloquea números y símbolos)
-    await fireEvent.changeText(screen.getByLabelText('Nombre(s)'), 'Alejandro123!');
-    expect(screen.getByLabelText('Nombre(s)').props.value).toBe('Alejandro');
-    await fireEvent.changeText(screen.getByLabelText('Apellidos'), 'Hernández99');
-    expect(screen.getByLabelText('Apellidos').props.value).toBe('Hernández');
+    // Llena los 4 campos de nombre (segundo nombre y apellido materno opcionales, máx 62)
+    await fireEvent.changeText(screen.getByLabelText('Primer nombre'), 'Alejandro123!');
+    expect(screen.getByLabelText('Primer nombre').props.value).toBe('Alejandro');
+    await fireEvent.changeText(screen.getByLabelText('Segundo nombre (opcional)'), 'Carlos');
+    await fireEvent.changeText(screen.getByLabelText('Apellido paterno'), 'Hernández99');
+    expect(screen.getByLabelText('Apellido paterno').props.value).toBe('Hernández');
+    await fireEvent.changeText(screen.getByLabelText('Apellido materno (opcional)'), 'García');
 
     await fireEvent.press(screen.getByRole('button', { name: 'Género' }));
     await fireEvent.press(await screen.findByText('Masculino'));
+
+    await fireEvent.press(
+      screen.getByRole('button', { name: 'Entidad de nacimiento (para calcular CURP)' }),
+    );
+    await fireEvent.press(await screen.findByText('Ciudad de México'));
 
     await fireEvent.press(screen.getByRole('button', { name: 'Nacionalidad' }));
     await fireEvent.press(await screen.findByText('Mexicana'));
@@ -91,12 +111,15 @@ describe('RegisterScreen Wizard (calendario >=18, listas de catálogos, sin erro
 
     await fireEvent.press(screen.getByRole('button', { name: 'Siguiente' }));
 
-    // Paso 2: CURP y RFC bloquean caracteres especiales
+    // Paso 2: CURP y RFC ya llegan precalculados automáticamente y con autofill deshabilitado
     expect(await screen.findByText('Paso 2 de 4 · Identificación y contacto')).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText('CURP (18 caracteres)'), 'HERA-950515@HDFRND01');
-    expect(screen.getByLabelText('CURP (18 caracteres)').props.value).toBe('HERA950515HDFRND01');
-    await fireEvent.changeText(screen.getByLabelText('RFC (12 o 13 caracteres)'), 'HERA#950515!ABC');
-    expect(screen.getByLabelText('RFC (12 o 13 caracteres)').props.value).toBe('HERA950515ABC');
+    const curpInput = screen.getByLabelText('CURP (18 caracteres)');
+    const rfcInput = screen.getByLabelText('RFC (12 o 13 caracteres)');
+    expect(curpInput.props.value).toHaveLength(18);
+    expect(rfcInput.props.value).toHaveLength(13);
+    expect(curpInput.props.importantForAutofill).toBe('no');
+    expect(rfcInput.props.importantForAutofill).toBe('no');
+
     await fireEvent.changeText(screen.getByLabelText('Correo electrónico'), 'nuevo@banco-demo.com');
     await fireEvent.changeText(screen.getByLabelText('Teléfono celular (10 dígitos)'), '5512345678');
 
@@ -107,13 +130,11 @@ describe('RegisterScreen Wizard (calendario >=18, listas de catálogos, sin erro
     await fireEvent.press(screen.getByRole('button', { name: 'Entidad federativa (Estado)' }));
     await fireEvent.press(await screen.findByText('Jalisco'));
 
-    // Al elegir estado NO debe salir error prematuro de municipio
     await waitFor(() => {
       expect(screen.queryByText(/municipio debe ser positivo/i)).toBeNull();
       expect(screen.queryByText(/municipio es obligatorio/i)).toBeNull();
     });
 
-    // Ahora selecciona el municipio de Jalisco y completa domicilio
     await fireEvent.press(screen.getByRole('button', { name: 'Municipio o Alcaldía' }));
     await fireEvent.press(await screen.findByText('Guadalajara'));
     expect(screen.getByText('Guadalajara')).toBeTruthy();
@@ -125,10 +146,15 @@ describe('RegisterScreen Wizard (calendario >=18, listas de catálogos, sin erro
 
     await fireEvent.press(screen.getByRole('button', { name: 'Siguiente' }));
 
-    // Paso 4: Ocupación solo letras + checklist en vivo + confirmar contraseña
-    expect(await screen.findByText('Paso 4 de 4 · Empleo y seguridad')).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText('Ocupación'), 'Ingeniero 2026');
-    expect(screen.getByLabelText('Ocupación').props.value).toBe('Ingeniero ');
+    // Paso 4: Catálogo de profesiones + rangos de monto de operación + checklist en vivo
+    expect(await screen.findByText('Paso 4 de 4 · Empleo, monto de operación y seguridad')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Profesión / Ocupación' }));
+    await fireEvent.press(await screen.findByText('Desarrollador(a) / Ingeniero(a) de software'));
+
+    await fireEvent.press(
+      screen.getByRole('button', { name: 'Monto de operación (rango mensual y límite por pago)' }),
+    );
+    await fireEvent.press(await screen.findByText('$5,001 a $10,000 MXN'));
 
     expect(screen.getByText('Requisitos de seguridad')).toBeTruthy();
     await fireEvent.changeText(screen.getByLabelText('Contraseña'), 'PasswordSegura#2026');

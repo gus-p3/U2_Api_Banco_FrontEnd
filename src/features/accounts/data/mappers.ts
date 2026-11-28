@@ -44,6 +44,9 @@ export function toCustomer(dto: ClientDto): Customer {
   return {
     fullName,
     firstName: dto.name,
+    secondName: dto.secondName,
+    lastName: dto.lastName,
+    secondLastName: dto.secondLastName,
     email: dto.contactDetail?.email,
     mobilePhone: dto.contactDetail?.mobilePhone,
     alternativePhone: dto.contactDetail?.alternativePhone,
@@ -70,6 +73,14 @@ export function toCustomer(dto: ClientDto): Customer {
     stateName: home?.stateName,
     postalCode: home?.postalCode,
     occupation: dto.employmentInformation?.occupation,
+    professionId: dto.employmentInformation?.idProfession,
+    professionName: dto.employmentInformation?.professionName,
+    operationAmountId: dto.employmentInformation?.idOperationAmount,
+    operationAmountLabel: dto.employmentInformation?.operationAmountLabel,
+    operationAmountMax:
+      dto.employmentInformation?.operationAmountMax != null
+        ? Number(dto.employmentInformation.operationAmountMax)
+        : undefined,
     company: dto.employmentInformation?.company,
     monthlyIncome: dto.employmentInformation?.monthlyIncome,
   };

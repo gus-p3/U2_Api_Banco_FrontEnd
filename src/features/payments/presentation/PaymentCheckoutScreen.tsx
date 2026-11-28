@@ -7,11 +7,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { toAppError } from '@/core/errors/toAppError';
 import { formatCurrency, maskAccount } from '@/core/utils/format';
 import {
+  sanitizeDecimalAmount,
   validatePaymentAmount,
   validatePhone10,
   validateServiceReference,
 } from '@/core/validation/validators';
-import { accountKeys, useAccounts } from '@/features/accounts/presentation/hooks';
+import { accountKeys, useAccounts, useCustomer } from '@/features/accounts/presentation/hooks';
 import { isBiometricConfirmationAvailable } from '@/features/auth/presentation/authActions';
 import { colors, radii, spacing, typography } from '@/shared/theme';
 import { AppModal, Button, Card, EmptyState, Input, Loader, ProviderLogo, Screen } from '@/shared/ui';
@@ -70,6 +71,8 @@ export function PaymentCheckoutScreen() {
         : 'RECARGA';
 
   const { accounts } = useAccounts();
+  const { data: customer } = useCustomer();
+  const operationLimit = customer?.operationAmountMax;
   const validateRefMutation = useValidateReference();
   const payMutation = usePay();
 
@@ -177,8 +180,17 @@ export function PaymentCheckoutScreen() {
     if (selectedAccountObj && effectiveAmount > 0 && selectedAccountObj.balance < effectiveAmount) {
       return `Saldo insuficiente en la cuenta (${formatCurrency(selectedAccountObj.balance)} disponible).`;
     }
+    if (operationLimit && effectiveAmount > operationLimit) {
+      return `El importe supera tu monto de operación configurado (${customer?.operationAmountLabel ?? formatCurrency(operationLimit)}). Puedes ajustarlo en Perfil.`;
+    }
     return undefined;
-  }, [selectedAccount, selectedAccountObj, effectiveAmount]);
+  }, [
+    selectedAccount,
+    selectedAccountObj,
+    effectiveAmount,
+    operationLimit,
+    customer?.operationAmountLabel,
+  ]);
 
   const phoneError = useMemo(() => {
     if (kind !== 'RECARGA') return undefined;
@@ -195,8 +207,9 @@ export function PaymentCheckoutScreen() {
     return validatePaymentAmount(amount, {
       maxBalance: selectedAccountObj?.balance,
       fixedPrice: selectedProduct?.price,
+      maxLimit: operationLimit,
     });
-  }, [kind, amount, selectedAccountObj?.balance, selectedProduct?.price]);
+  }, [kind, amount, selectedAccountObj?.balance, selectedProduct?.price, operationLimit]);
 
   if (needsCatalogLookup && productsQuery.isLoading) {
     return (
@@ -454,7 +467,7 @@ export function PaymentCheckoutScreen() {
               placeholder="150.00"
               value={amount}
               onChangeText={(val) => {
-                setAmount(val.replace(/[^0-9.]/g, ''));
+                setAmount(sanitizeDecimalAmount(val));
                 setAmountTouched(true);
                 setReferenceValidation(null);
               }}
@@ -463,7 +476,9 @@ export function PaymentCheckoutScreen() {
               hint={
                 selectedProduct.price
                   ? `Este servicio tiene monto fijo: ${formatCurrency(selectedProduct.price)}`
-                  : 'Hasta 2 decimales. Sin comisión para el cliente.'
+                  : customer?.operationAmountLabel
+                    ? `Hasta 2 decimales. Tu límite de operación: ${customer.operationAmountLabel}.`
+                    : 'Hasta 2 decimales. Sin comisión para el cliente.'
               }
             />
 

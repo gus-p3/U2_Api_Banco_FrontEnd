@@ -309,6 +309,8 @@ export function LoginScreen() {
                 label="Código de verificación (6 dígitos)"
                 placeholder="000000"
                 keyboardType="number-pad"
+                autoComplete="one-time-code"
+                textContentType="oneTimeCode"
                 maxLength={6}
                 value={otpCode}
                 onBlur={() => setOtpTouched(true)}

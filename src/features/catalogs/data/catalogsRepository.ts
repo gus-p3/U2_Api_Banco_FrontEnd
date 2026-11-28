@@ -2,14 +2,28 @@ import type { AxiosInstance } from 'axios';
 
 import { http } from '@/core/http/client';
 
-import type { CatalogItem, CatalogsRepository, Municipality, State } from '../domain/entities';
+import type {
+  CatalogItem,
+  CatalogsRepository,
+  Municipality,
+  OperationAmountRange,
+  State,
+} from '../domain/entities';
 
 interface SimpleDto {
   idGender?: number;
   idNationality?: number;
   idMaritalStatus?: number;
+  idProfession?: number;
   name: string;
   description?: string;
+  isActive?: boolean;
+}
+interface OperationAmountDto {
+  idOperationAmount: number;
+  label: string;
+  minAmount: number;
+  maxAmount: number;
   isActive?: boolean;
 }
 interface StateDto {
@@ -27,7 +41,7 @@ interface MunicipalityDto {
 }
 
 const toItem = (dto: SimpleDto): CatalogItem => ({
-  id: dto.idGender ?? dto.idNationality ?? dto.idMaritalStatus ?? 0,
+  id: dto.idGender ?? dto.idNationality ?? dto.idMaritalStatus ?? dto.idProfession ?? 0,
   name: dto.name,
   description: dto.description,
 });
@@ -42,6 +56,20 @@ export function createCatalogsRepository(client: AxiosInstance): CatalogsReposit
     getGenders: () => list('generos'),
     getNationalities: () => list('nacionalidades'),
     getMaritalStatuses: () => list('estados-civiles'),
+    getProfessions: () => list('profesiones'),
+    async getOperationAmounts(): Promise<OperationAmountRange[]> {
+      const { data } = await client.get<OperationAmountDto[]>('/v1/catalogos/montos-operacion', {
+        skipAuth: true,
+      });
+      return data
+        .filter((r) => r.isActive !== false)
+        .map((r) => ({
+          id: r.idOperationAmount,
+          label: r.label,
+          minAmount: Number(r.minAmount),
+          maxAmount: Number(r.maxAmount),
+        }));
+    },
     async getStates(): Promise<State[]> {
       const { data } = await client.get<StateDto[]>('/v1/catalogos/estados', { skipAuth: true });
       return data
