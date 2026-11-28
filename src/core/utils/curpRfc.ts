@@ -1,6 +1,7 @@
 /**
- * Cálculo automático de CURP (norma RENAPO, 18 caracteres) y RFC Persona Física (norma SAT, 13 caracteres)
- * a partir de los datos personales capturados en el registro.
+ * Cálculo del prefijo base determinista de CURP (primeros 13 caracteres: 4 letras + AAMMDD + sexo + estado)
+ * y RFC Persona Física (primeros 10 caracteres: 4 letras + AAMMDD) a partir de los datos personales.
+ * Los caracteres finales (consonantes/homoclave/dígito verificador) los completa el usuario libremente.
  */
 
 export const INEGI_TO_CURP_STATE: Record<string, string> = {
@@ -157,7 +158,6 @@ function stripAccents(str: string): string {
 }
 
 function normalizeForCurp(raw: string): string {
-  // Conserva la Ñ antes de quitar diacríticos y la convierte a X según RENAPO
   const withPlaceholder = raw.trim().toUpperCase().replace(/Ñ/g, '#');
   return stripAccents(withPlaceholder)
     .replace(/#/g, 'X')
@@ -207,112 +207,11 @@ function firstInternalVowel(word: string): string {
   return 'X';
 }
 
-function firstInternalConsonant(word: string): string {
-  if (!word) return 'X';
-  for (let i = 1; i < word.length; i += 1) {
-    const ch = word[i]!;
-    if (!VOWELS.has(ch) && /[A-Z]/.test(ch)) {
-      return ch;
-    }
-  }
-  return 'X';
-}
-
 function sanitizeInconvenient(prefix4: string): string {
   if (INCONVENIENT_WORDS.has(prefix4)) {
     return `${prefix4[0]}X${prefix4.slice(2)}`;
   }
   return prefix4;
-}
-
-function computeCurpCheckDigit(curp17: string): string {
-  const alphabet = '0123456789ABCDEFGHIJKLMNÑOPQRSTUVWXYZ';
-  let sum = 0;
-  for (let i = 0; i < 17; i += 1) {
-    const idx = alphabet.indexOf(curp17[i]!);
-    const val = idx >= 0 ? idx : 0;
-    sum += val * (18 - i);
-  }
-  const mod = 10 - (sum % 10);
-  return mod === 10 ? '0' : String(mod);
-}
-
-// Tabla Anexo I del SAT para cálculo de homoclave de RFC
-const RFC_HOMOCLAVE_MAP: Record<string, string> = {
-  ' ': '00',
-  '0': '00',
-  '1': '01',
-  '2': '02',
-  '3': '03',
-  '4': '04',
-  '5': '05',
-  '6': '06',
-  '7': '07',
-  '8': '08',
-  '9': '09',
-  '&': '10',
-  A: '11',
-  B: '12',
-  C: '13',
-  D: '14',
-  E: '15',
-  F: '16',
-  G: '17',
-  H: '18',
-  I: '19',
-  J: '21',
-  K: '22',
-  L: '23',
-  M: '24',
-  N: '25',
-  O: '26',
-  P: '27',
-  Q: '28',
-  R: '29',
-  S: '32',
-  T: '33',
-  U: '34',
-  V: '35',
-  W: '36',
-  X: '37',
-  Y: '38',
-  Z: '39',
-  Ñ: '40',
-};
-
-const RFC_HOMOCLAVE_CHARS = '123456789ABCDEFGHIJKLMNPQRSTUVWXYZ';
-
-function computeRfcHomoclave(fullName: string): string {
-  const normalized = normalizeForRfc(fullName);
-  let numeric = '0';
-  for (const ch of normalized) {
-    numeric += RFC_HOMOCLAVE_MAP[ch] ?? '00';
-  }
-  let sum = 0;
-  for (let i = 0; i < numeric.length - 1; i += 1) {
-    const pair = Number(numeric.slice(i, i + 2));
-    const next = Number(numeric[i + 1]);
-    sum += pair * next;
-  }
-  const lastThree = sum % 1000;
-  const quotient = Math.floor(lastThree / 34);
-  const remainder = lastThree % 34;
-  return `${RFC_HOMOCLAVE_CHARS[quotient] ?? '1'}${RFC_HOMOCLAVE_CHARS[remainder] ?? '1'}`;
-}
-
-function computeRfcCheckDigit(rfc12: string): string {
-  const table = '0123456789ABCDEFGHIJKLMN&OPQRSTUVWXYZ Ñ';
-  let sum = 0;
-  for (let i = 0; i < 12; i += 1) {
-    const idx = table.indexOf(rfc12[i]!);
-    const val = idx >= 0 ? idx : 0;
-    sum += val * (13 - i);
-  }
-  const remainder = sum % 11;
-  if (remainder === 0) return '0';
-  const diff = 11 - remainder;
-  if (diff === 10) return 'A';
-  return String(diff);
 }
 
 export interface IdentityCalcInput {
@@ -321,7 +220,7 @@ export interface IdentityCalcInput {
   lastName: string;
   secondLastName?: string;
   birthDate: string; // YYYY-MM-DD
-  genderName?: string; // ej. Masculino / Hombre / Femenino / Mujer
+  genderName?: string;
   birthStateCode?: string; // clave INEGI '01'..'32' o 'NE'
 }
 
@@ -343,11 +242,15 @@ export function resolveCurpStateCode(inegiOrCurpCode?: string): string | null {
   return null;
 }
 
+/**
+ * Calcula los primeros 13 caracteres de la CURP (ej. MEAB051016HGT):
+ * 4 letras iniciales + AAMMDD + sexo (H/M) + entidad federativa (2 letras).
+ * Los 5 caracteres restantes los ingresa el usuario.
+ */
 export function calculateCurp(input: IdentityCalcInput): string | null {
   const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.birthDate.trim());
   if (!dateMatch) return null;
 
-  const year = Number(dateMatch[1]);
   const yy = dateMatch[1]!.slice(2);
   const mm = dateMatch[2]!;
   const dd = dateMatch[3]!;
@@ -366,16 +269,14 @@ export function calculateCurp(input: IdentityCalcInput): string | null {
   const l4 = nom[0] ?? 'X';
   const prefix4 = sanitizeInconvenient(`${l1}${l2}${l3}${l4}`);
 
-  const c1 = firstInternalConsonant(pat);
-  const c2 = mat ? firstInternalConsonant(mat) : 'X';
-  const c3 = firstInternalConsonant(nom);
-  const centuryChar = year >= 2000 ? 'A' : '0';
-
-  const curp17 = `${prefix4}${yy}${mm}${dd}${sex}${stateCode}${c1}${c2}${c3}${centuryChar}`;
-  if (curp17.length !== 17) return null;
-  return `${curp17}${computeCurpCheckDigit(curp17)}`;
+  return `${prefix4}${yy}${mm}${dd}${sex}${stateCode}`;
 }
 
+/**
+ * Calcula los primeros 10 caracteres del RFC Persona Física (ej. MEAB051016):
+ * 4 letras iniciales + AAMMDD.
+ * Los 3 caracteres finales de homoclave los ingresa el usuario.
+ */
 export function calculateRfc(input: IdentityCalcInput): string | null {
   const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.birthDate.trim());
   if (!dateMatch) return null;
@@ -392,20 +293,13 @@ export function calculateRfc(input: IdentityCalcInput): string | null {
 
   let rawPrefix: string;
   if (!mat) {
-    // Regla SAT sin apellido materno: 2 primeras letras de apellido paterno + 2 primeras de nombre
     rawPrefix = `${pat.slice(0, 2).padEnd(2, 'X')}${nom.slice(0, 2).padEnd(2, 'X')}`;
   } else if (pat.length <= 2) {
-    // Regla SAT apellido paterno corto (1-2 letras): 1ra pat + 1ra mat + 2 primeras nombre
     rawPrefix = `${pat[0] ?? 'X'}${mat[0] ?? 'X'}${nom.slice(0, 2).padEnd(2, 'X')}`;
   } else {
     rawPrefix = `${pat[0] ?? 'X'}${firstInternalVowel(pat)}${mat[0] ?? 'X'}${nom[0] ?? 'X'}`;
   }
 
   const prefix4 = sanitizeInconvenient(rawPrefix.replace(/Ñ/g, 'X'));
-  const fullForHomo = [input.lastName, input.secondLastName, input.firstName, input.secondName]
-    .filter((s) => s && s.trim())
-    .join(' ');
-  const homo2 = computeRfcHomoclave(fullForHomo);
-  const rfc12 = `${prefix4}${yy}${mm}${dd}${homo2}`;
-  return `${rfc12}${computeRfcCheckDigit(rfc12)}`;
+  return `${prefix4}${yy}${mm}${dd}`;
 }

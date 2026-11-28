@@ -111,14 +111,18 @@ describe('RegisterScreen Wizard (4 nombres, auto CURP/RFC, autofill seguro, prof
 
     await fireEvent.press(screen.getByRole('button', { name: 'Siguiente' }));
 
-    // Paso 2: CURP y RFC ya llegan precalculados automáticamente y con autofill deshabilitado
+    // Paso 2: CURP (13 chars base) y RFC (10 chars base) llegan prellenados y editables, sin autofill
     expect(await screen.findByText('Paso 2 de 4 · Identificación y contacto')).toBeTruthy();
     const curpInput = screen.getByLabelText('CURP (18 caracteres)');
     const rfcInput = screen.getByLabelText('RFC (12 o 13 caracteres)');
-    expect(curpInput.props.value).toHaveLength(18);
-    expect(rfcInput.props.value).toHaveLength(13);
+    expect(curpInput.props.value).toHaveLength(13);
+    expect(rfcInput.props.value).toHaveLength(10);
     expect(curpInput.props.importantForAutofill).toBe('no');
     expect(rfcInput.props.importantForAutofill).toBe('no');
+
+    // El usuario puede completar (o editar/borrar) libremente ambos campos
+    await fireEvent.changeText(curpInput, `${curpInput.props.value}RRL01`);
+    await fireEvent.changeText(rfcInput, `${rfcInput.props.value}ABC`);
 
     await fireEvent.changeText(screen.getByLabelText('Correo electrónico'), 'nuevo@banco-demo.com');
     await fireEvent.changeText(screen.getByLabelText('Teléfono celular (10 dígitos)'), '5512345678');

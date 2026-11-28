@@ -223,20 +223,20 @@ export function RegisterScreen() {
     if (!curpManuallyEditedRef.current) {
       const nextCurp = calculateCurp(calcInput);
       if (nextCurp) {
-        setValue('curp', nextCurp, { shouldValidate: step >= 1 });
+        setValue('curp', nextCurp, { shouldValidate: false });
         updated = true;
       }
     }
     if (!rfcManuallyEditedRef.current) {
       const nextRfc = calculateRfc(calcInput);
       if (nextRfc) {
-        setValue('rfc', nextRfc, { shouldValidate: step >= 1 });
+        setValue('rfc', nextRfc, { shouldValidate: false });
         updated = true;
       }
     }
     if (updated) {
       setAutoCalcBanner(
-        'CURP y RFC calculados automáticamente con tus datos personales. Puedes ajustarlos si tu homoclave oficial difiere.',
+        'Prellenamos la base de tu CURP (13 caracteres) y RFC (10 caracteres). Completa los caracteres finales; puedes editar o borrar cualquier campo libremente.',
       );
     }
   }, [
@@ -248,7 +248,6 @@ export function RegisterScreen() {
     selectedGenderName,
     watchedBirthStateCode,
     setValue,
-    step,
   ]);
 
   const handleRecalculateIdentity = () => {
@@ -265,12 +264,18 @@ export function RegisterScreen() {
     };
     const nextCurp = calculateCurp(calcInput);
     const nextRfc = calculateRfc(calcInput);
-    if (nextCurp) setValue('curp', nextCurp, { shouldValidate: true, shouldTouch: true });
-    if (nextRfc) setValue('rfc', nextRfc, { shouldValidate: true, shouldTouch: true });
+    if (nextCurp) {
+      setValue('curp', nextCurp, { shouldValidate: false });
+      clearErrors('curp');
+    }
+    if (nextRfc) {
+      setValue('rfc', nextRfc, { shouldValidate: false });
+      clearErrors('rfc');
+    }
     setAutoCalcBanner(
       nextCurp || nextRfc
-        ? 'CURP y RFC recalculados automáticamente.'
-        : 'Completa tus datos del Paso 1 para calcular CURP y RFC.',
+        ? 'Base de CURP (13 chars) y RFC (10 chars) restablecida. Completa los caracteres finales.'
+        : 'Completa tus datos del Paso 1 para prellenar tu CURP y RFC.',
     );
   };
 
@@ -624,7 +629,7 @@ export function RegisterScreen() {
                     field.onChange(sanitizeCurp(txt));
                   }}
                   error={errors.curp?.message}
-                  hint="Calculada automáticamente; puedes editar los últimos 2 dígitos si aplica."
+                  hint="Prellenamos los primeros 13 caracteres; completa los 5 finales de tu CURP."
                 />
               )}
             />
@@ -647,12 +652,12 @@ export function RegisterScreen() {
                     field.onChange(sanitizeRfc(txt));
                   }}
                   error={errors.rfc?.message}
-                  hint="Calculado con homoclave estimada; ajústalo si ya cuentas con constancia SAT."
+                  hint="Prellenamos los primeros 10 caracteres; completa los 3 de tu homoclave."
                 />
               )}
             />
             <Button
-              title="Recalcular CURP y RFC automáticamente"
+              title="Restablecer base de CURP y RFC"
               variant="outline"
               onPress={handleRecalculateIdentity}
             />

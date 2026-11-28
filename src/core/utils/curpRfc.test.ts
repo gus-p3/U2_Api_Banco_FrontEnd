@@ -1,8 +1,7 @@
 import { calculateCurp, calculateRfc } from './curpRfc';
-import { CURP_REGEX, RFC_REGEX } from '@/features/auth/presentation/registerSchema';
 
-describe('calculateCurp y calculateRfc', () => {
-  it('calcula una CURP válida de 18 caracteres y RFC de 13 caracteres con 4 nombres', () => {
+describe('calculateCurp y calculateRfc (prefijos deterministas)', () => {
+  it('calcula los primeros 13 caracteres de la CURP y los primeros 10 del RFC', () => {
     const input = {
       firstName: 'Alejandro',
       secondName: 'Carlos',
@@ -12,23 +11,18 @@ describe('calculateCurp y calculateRfc', () => {
       genderName: 'Masculino',
       birthStateCode: '09',
     };
-    const curp = calculateCurp(input);
-    const rfc = calculateRfc(input);
+    const curpBase = calculateCurp(input);
+    const rfcBase = calculateRfc(input);
 
-    expect(curp).not.toBeNull();
-    expect(curp).toHaveLength(18);
-    expect(CURP_REGEX.test(curp!)).toBe(true);
-    // HeRnández (R) · GaRcía (R) · ALejandro (L)
-    expect(curp!.startsWith('HEGA950515HDFRRL0')).toBe(true);
+    expect(curpBase).toBe('HEGA950515HDF');
+    expect(curpBase).toHaveLength(13);
 
-    expect(rfc).not.toBeNull();
-    expect(rfc).toHaveLength(13);
-    expect(RFC_REGEX.test(rfc!)).toBe(true);
-    expect(rfc!.startsWith('HEGA950515')).toBe(true);
+    expect(rfcBase).toBe('HEGA950515');
+    expect(rfcBase).toHaveLength(10);
   });
 
   it('omite MARÍA/JOSÉ cuando hay segundo nombre compuesto', () => {
-    const curp = calculateCurp({
+    const curpBase = calculateCurp({
       firstName: 'María',
       secondName: 'Fernanda',
       lastName: 'López',
@@ -37,12 +31,8 @@ describe('calculateCurp y calculateRfc', () => {
       genderName: 'Femenino',
       birthStateCode: '14',
     });
-    expect(curp).not.toBeNull();
-    expect(CURP_REGEX.test(curp!)).toBe(true);
-    // Usa F de Fernanda, siglo >= 2000 usa 'A', Jalisco = JC
-    expect(curp!.startsWith('LOPF010820MJCRRA')).toBe(false);
-    expect(curp!.slice(0, 16)).toBe('LOPF010820MJCPRR');
-    expect(curp![16]).toBe('A');
+    expect(curpBase).toBe('LOPF010820MJC');
+    expect(curpBase).toHaveLength(13);
   });
 
   it('soporta apellido materno opcional (usa X en CURP y regla SAT en RFC)', () => {
@@ -55,20 +45,12 @@ describe('calculateCurp y calculateRfc', () => {
       genderName: 'Hombre',
       birthStateCode: 'NE',
     };
-    const curp = calculateCurp(input);
-    const rfc = calculateRfc(input);
-
-    expect(curp).not.toBeNull();
-    expect(CURP_REGEX.test(curp!)).toBe(true);
-    expect(curp!.slice(0, 13)).toBe('RAXG980310HNE');
-
-    expect(rfc).not.toBeNull();
-    expect(RFC_REGEX.test(rfc!)).toBe(true);
-    expect(rfc!.startsWith('RAGU980310')).toBe(true);
+    expect(calculateCurp(input)).toBe('RAXG980310HNE');
+    expect(calculateRfc(input)).toBe('RAGU980310');
   });
 
   it('sustituye palabras inconvenientes (antisonantes) en la segunda letra por X', () => {
-    const curp = calculateCurp({
+    const curpBase = calculateCurp({
       firstName: 'Ana',
       lastName: 'Vaca',
       secondLastName: 'Cruz',
@@ -76,7 +58,6 @@ describe('calculateCurp y calculateRfc', () => {
       genderName: 'Mujer',
       birthStateCode: '19',
     });
-    expect(curp).not.toBeNull();
-    expect(curp!.startsWith('VXCA920105MNL')).toBe(true);
+    expect(curpBase).toBe('VXCA920105MNL');
   });
 });
