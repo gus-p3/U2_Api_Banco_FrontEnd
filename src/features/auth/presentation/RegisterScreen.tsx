@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -94,16 +94,14 @@ export function RegisterScreen() {
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [resendingCode, setResendingCode] = useState(false);
   const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
-  const [autoCalcBanner, setAutoCalcBanner] = useState<string | null>(null);
+  const [curpSuffix, setCurpSuffix] = useState('');
+  const [rfcSuffix, setRfcSuffix] = useState('');
   const [submitModal, setSubmitModal] = useState<{
     status: 'idle' | 'loading' | 'success' | 'error';
     title: string;
     message: string;
     challenge?: AuthChallenge | null;
   }>({ status: 'idle', title: '', message: '', challenge: null });
-
-  const curpManuallyEditedRef = useRef(false);
-  const rfcManuallyEditedRef = useRef(false);
 
   const genders = useGenders();
   const nationalities = useNationalities();
@@ -222,77 +220,42 @@ export function RegisterScreen() {
     [genders.data, watchedGenderId],
   );
 
-  // Recalcula CURP y RFC automáticamente al cambiar los datos personales (salvo edición manual)
+  const identityCalcInput = useMemo(
+    () => ({
+      firstName: watchedName,
+      secondName: watchedSecondName,
+      lastName: watchedLastName,
+      secondLastName: watchedSecondLastName,
+      birthDate: watchedBirthDate,
+      genderName: selectedGenderName,
+      birthStateCode: watchedBirthStateCode,
+    }),
+    [
+      watchedName,
+      watchedSecondName,
+      watchedLastName,
+      watchedSecondLastName,
+      watchedBirthDate,
+      selectedGenderName,
+      watchedBirthStateCode,
+    ],
+  );
+
+  // Prefijos calculados bloqueados (no borrables): 16 caracteres de CURP y 10 caracteres de RFC
+  const curpPrefix = useMemo(() => calculateCurp(identityCalcInput) ?? '', [identityCalcInput]);
+  const rfcPrefix = useMemo(() => calculateRfc(identityCalcInput) ?? '', [identityCalcInput]);
+
   useEffect(() => {
-    const calcInput = {
-      firstName: watchedName,
-      secondName: watchedSecondName,
-      lastName: watchedLastName,
-      secondLastName: watchedSecondLastName,
-      birthDate: watchedBirthDate,
-      genderName: selectedGenderName,
-      birthStateCode: watchedBirthStateCode,
-    };
+    setValue('curp', curpPrefix ? `${curpPrefix}${curpSuffix}` : curpSuffix, {
+      shouldValidate: curpSuffix.length > 0,
+    });
+  }, [curpPrefix, curpSuffix, setValue]);
 
-    let updated = false;
-    if (!curpManuallyEditedRef.current) {
-      const nextCurp = calculateCurp(calcInput);
-      if (nextCurp) {
-        setValue('curp', nextCurp, { shouldValidate: false });
-        updated = true;
-      }
-    }
-    if (!rfcManuallyEditedRef.current) {
-      const nextRfc = calculateRfc(calcInput);
-      if (nextRfc) {
-        setValue('rfc', nextRfc, { shouldValidate: false });
-        updated = true;
-      }
-    }
-    if (updated) {
-      setAutoCalcBanner(
-        'Prellenamos los primeros 16 caracteres de tu CURP (solo faltan los últimos 2) y los primeros 10 de tu RFC (faltan los últimos 3). Puedes editar o borrar libremente.',
-      );
-    }
-  }, [
-    watchedName,
-    watchedSecondName,
-    watchedLastName,
-    watchedSecondLastName,
-    watchedBirthDate,
-    selectedGenderName,
-    watchedBirthStateCode,
-    setValue,
-  ]);
-
-  const handleRecalculateIdentity = () => {
-    curpManuallyEditedRef.current = false;
-    rfcManuallyEditedRef.current = false;
-    const calcInput = {
-      firstName: watchedName,
-      secondName: watchedSecondName,
-      lastName: watchedLastName,
-      secondLastName: watchedSecondLastName,
-      birthDate: watchedBirthDate,
-      genderName: selectedGenderName,
-      birthStateCode: watchedBirthStateCode,
-    };
-    const nextCurp = calculateCurp(calcInput);
-    const nextRfc = calculateRfc(calcInput);
-    if (nextCurp) {
-      setValue('curp', nextCurp, { shouldValidate: false });
-      clearErrors('curp');
-    }
-    if (nextRfc) {
-      setValue('rfc', nextRfc, { shouldValidate: false });
-      clearErrors('rfc');
-    }
-    setAutoCalcBanner(
-      nextCurp || nextRfc
-        ? 'Base de CURP (16 chars) y RFC (10 chars) restablecida. Completa solo los caracteres finales.'
-        : 'Completa tus datos del Paso 1 para prellenar tu CURP y RFC.',
-    );
-  };
+  useEffect(() => {
+    setValue('rfc', rfcPrefix ? `${rfcPrefix}${rfcSuffix}` : rfcSuffix, {
+      shouldValidate: rfcSuffix.length > 0,
+    });
+  }, [rfcPrefix, rfcSuffix, setValue]);
 
   const currentStep = STEPS[step] ?? STEPS[0]!;
 
@@ -634,10 +597,13 @@ export function RegisterScreen() {
 
         {step === 1 ? (
           <>
-            {autoCalcBanner ? (
+            {curpPrefix || rfcPrefix ? (
               <View style={styles.autoCalcBox}>
-                <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
-                <Text style={styles.autoCalcText}>{autoCalcBanner}</Text>
+                <Ionicons name="lock-closed-outline" size={18} color={colors.primary} />
+                <Text style={styles.autoCalcText}>
+                  Calculamos la base de tu CURP y RFC con tus datos del Paso 1. Solo escribe los
+                  caracteres finales que faltan; si necesitas corregir la base, regresa al Paso 1.
+                </Text>
               </View>
             ) : null}
 
@@ -647,20 +613,34 @@ export function RegisterScreen() {
               render={({ field }) => (
                 <Input
                   label="CURP (18 caracteres)"
-                  placeholder="HERA950515HDFRND01"
+                  lockedPrefix={curpPrefix || undefined}
+                  placeholder={curpPrefix ? '01' : 'HERA950515HDFRND01'}
                   autoCapitalize="characters"
                   autoComplete="off"
                   importantForAutofill="no"
                   textContentType="none"
-                  maxLength={18}
-                  value={field.value}
+                  maxLength={curpPrefix ? 2 : 18}
+                  value={curpPrefix ? curpSuffix : field.value}
                   onBlur={field.onBlur}
                   onChangeText={(txt) => {
-                    curpManuallyEditedRef.current = true;
-                    field.onChange(sanitizeCurp(txt));
+                    const clean = sanitizeCurp(txt);
+                    if (curpPrefix) {
+                      const nextSuffix = clean.startsWith(curpPrefix)
+                        ? clean.slice(curpPrefix.length, curpPrefix.length + 2)
+                        : clean.slice(0, 2);
+                      setCurpSuffix(nextSuffix);
+                      field.onChange(`${curpPrefix}${nextSuffix}`);
+                    } else {
+                      setCurpSuffix(clean.slice(0, 18));
+                      field.onChange(clean.slice(0, 18));
+                    }
                   }}
                   error={errors.curp?.message}
-                  hint="Prellenamos los primeros 16 caracteres; completa los últimos 2 de tu CURP."
+                  hint={
+                    curpPrefix
+                      ? 'Solo completa los últimos 2 caracteres de tu CURP (homonimia y dígito verificador).'
+                      : undefined
+                  }
                 />
               )}
             />
@@ -669,28 +649,35 @@ export function RegisterScreen() {
               name="rfc"
               render={({ field }) => (
                 <Input
-                  label="RFC (12 o 13 caracteres)"
-                  placeholder="HERA950515ABC"
+                  label="RFC (13 caracteres)"
+                  lockedPrefix={rfcPrefix || undefined}
+                  placeholder={rfcPrefix ? 'ABC' : 'HERA950515ABC'}
                   autoCapitalize="characters"
                   autoComplete="off"
                   importantForAutofill="no"
                   textContentType="none"
-                  maxLength={13}
-                  value={field.value}
+                  maxLength={rfcPrefix ? 3 : 13}
+                  value={rfcPrefix ? rfcSuffix : field.value}
                   onBlur={field.onBlur}
                   onChangeText={(txt) => {
-                    rfcManuallyEditedRef.current = true;
-                    field.onChange(sanitizeRfc(txt));
+                    const clean = sanitizeRfc(txt);
+                    if (rfcPrefix) {
+                      const nextSuffix = clean.startsWith(rfcPrefix)
+                        ? clean.slice(rfcPrefix.length, rfcPrefix.length + 3)
+                        : clean.slice(0, 3);
+                      setRfcSuffix(nextSuffix);
+                      field.onChange(`${rfcPrefix}${nextSuffix}`);
+                    } else {
+                      setRfcSuffix(clean.slice(0, 13));
+                      field.onChange(clean.slice(0, 13));
+                    }
                   }}
                   error={errors.rfc?.message}
-                  hint="Prellenamos los primeros 10 caracteres; completa los 3 de tu homoclave."
+                  hint={
+                    rfcPrefix ? 'Solo completa los últimos 3 caracteres de tu homoclave SAT.' : undefined
+                  }
                 />
               )}
-            />
-            <Button
-              title="Restablecer base de CURP y RFC"
-              variant="outline"
-              onPress={handleRecalculateIdentity}
             />
             <Controller
               control={control}

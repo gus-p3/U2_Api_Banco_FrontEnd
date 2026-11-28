@@ -8,12 +8,15 @@ export interface InputProps extends TextInputProps {
   label: string;
   error?: string;
   hint?: string;
+  /** Prefijo calculado de solo lectura que el usuario no puede borrar; solo escribe lo que falta. */
+  lockedPrefix?: string;
 }
 
 function InputBase({
   label,
   error,
   hint,
+  lockedPrefix,
   style,
   onFocus,
   onBlur,
@@ -37,6 +40,13 @@ function InputBase({
     <View style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
       <View style={[styles.inputContainer, focused && styles.focused, !!error && styles.errorBorder]}>
+        {lockedPrefix ? (
+          <View style={styles.lockedPrefixBox}>
+            <Text selectable={false} style={styles.lockedPrefixText}>
+              {lockedPrefix}
+            </Text>
+          </View>
+        ) : null}
         <TextInput
           accessibilityLabel={label}
           placeholderTextColor="#94A3B8"
@@ -46,7 +56,12 @@ function InputBase({
           importantForAutofill={resolvedImportantForAutofill}
           textContentType={resolvedTextContentType}
           secureTextEntry={isPasswordField && !passwordVisible}
-          style={[styles.input, isPasswordField && styles.inputWithAction, style]}
+          style={[
+            styles.input,
+            lockedPrefix && styles.inputWithPrefix,
+            isPasswordField && styles.inputWithAction,
+            style,
+          ]}
           onFocus={(e) => {
             setFocused(true);
             onFocus?.(e);
@@ -97,6 +112,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted,
     flexDirection: 'row',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  lockedPrefixBox: {
+    minHeight: layout.minTouchTarget - 3,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primarySoft,
+    borderRightWidth: 1,
+    borderRightColor: colors.border,
+    justifyContent: 'center',
+  },
+  lockedPrefixText: {
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   input: {
     flex: 1,
@@ -104,6 +134,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     color: colors.text,
     fontSize: 15,
+  },
+  inputWithPrefix: {
+    paddingHorizontal: spacing.md,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   inputWithAction: {
     paddingRight: spacing.xs,

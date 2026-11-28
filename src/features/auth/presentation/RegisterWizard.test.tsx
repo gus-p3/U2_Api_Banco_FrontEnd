@@ -111,18 +111,26 @@ describe('RegisterScreen Wizard (4 nombres, auto CURP/RFC, autofill seguro, prof
 
     await fireEvent.press(screen.getByRole('button', { name: 'Siguiente' }));
 
-    // Paso 2: CURP (16 chars base, faltan últimos 2) y RFC (10 chars base, faltan últimos 3)
+    // Paso 2: CURP (prefijo bloqueado 16 chars + input solo 2 chars) y RFC (prefijo bloqueado 10 chars + input solo 3 chars)
     expect(await screen.findByText('Paso 2 de 4 · Identificación y contacto')).toBeTruthy();
     const curpInput = screen.getByLabelText('CURP (18 caracteres)');
-    const rfcInput = screen.getByLabelText('RFC (12 o 13 caracteres)');
-    expect(curpInput.props.value).toHaveLength(16);
-    expect(rfcInput.props.value).toHaveLength(10);
+    const rfcInput = screen.getByLabelText('RFC (13 caracteres)');
+    expect(curpInput.props.maxLength).toBe(2);
+    expect(curpInput.props.value).toBe('');
+    expect(rfcInput.props.maxLength).toBe(3);
+    expect(rfcInput.props.value).toBe('');
     expect(curpInput.props.importantForAutofill).toBe('no');
     expect(rfcInput.props.importantForAutofill).toBe('no');
+    // El prefijo calculado aparece bloqueado y no se borra aunque el sufijo quede vacío
+    expect(screen.getByText(/^HEGA\d{6}HDFRRL$/)).toBeTruthy();
+    expect(screen.getByText(/^HEGA\d{6}$/)).toBeTruthy();
 
-    // El usuario completa solo los últimos 2 de CURP y los últimos 3 de RFC (y puede editar libremente)
-    await fireEvent.changeText(curpInput, `${curpInput.props.value}01`);
-    await fireEvent.changeText(rfcInput, `${rfcInput.props.value}ABC`);
+    // El usuario solo agrega los últimos 2 de CURP y los últimos 3 de RFC
+    await fireEvent.changeText(curpInput, '01');
+    await fireEvent.changeText(curpInput, '');
+    expect(screen.getByText(/^HEGA\d{6}HDFRRL$/)).toBeTruthy();
+    await fireEvent.changeText(curpInput, '01');
+    await fireEvent.changeText(rfcInput, 'ABC');
 
     await fireEvent.changeText(screen.getByLabelText('Correo electrónico'), 'nuevo@banco-demo.com');
     await fireEvent.changeText(screen.getByLabelText('Teléfono celular (10 dígitos)'), '5512345678');
