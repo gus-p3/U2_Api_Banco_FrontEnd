@@ -34,6 +34,9 @@ export interface PagoResponseDto {
   numAutorizacion?: string;
   idTx?: number;
   upc?: string;
+  leyendaProducto?: string;
+  aclaraciones?: string;
+  ticketEnviadoCorreo?: boolean;
 }
 
 export interface ValidateReferenceRequestDto {
@@ -81,6 +84,8 @@ export interface PagoDetalleDto {
   numAutorizacion?: string;
   idTx?: number;
   upc?: string;
+  leyendaProducto?: string;
+  aclaraciones?: string;
   fechaEnvio?: string;
   fechaCreacion?: string;
   fechaActualizacion?: string;

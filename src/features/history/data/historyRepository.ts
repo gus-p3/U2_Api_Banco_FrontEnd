@@ -41,6 +41,8 @@ export function toHistoryItem(dto: PagoDetalleDto): PaymentHistoryItem {
     transactionId: dto.idTx,
     upc: dto.upc,
     gatewayCode: dto.codigoGestoPago,
+    productLegend: dto.leyendaProducto,
+    claimsInfo: dto.aclaraciones,
     message: dto.mensaje,
     createdAt: dto.fechaCreacion ?? dto.fechaEnvio ?? new Date().toISOString(),
   };

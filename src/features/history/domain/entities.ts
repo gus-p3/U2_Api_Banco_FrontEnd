@@ -20,6 +20,8 @@ export interface PaymentHistoryItem {
   transactionId?: number;
   upc?: string;
   gatewayCode?: string;
+  productLegend?: string;
+  claimsInfo?: string;
   message: string;
   createdAt: string;
 }

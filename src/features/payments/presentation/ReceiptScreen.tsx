@@ -152,6 +152,30 @@ export function ReceiptScreen() {
         {receipt.upc ? <Row label="Folio UPC" value={receipt.upc} /> : null}
         <Row label="Fecha y hora" value={formatDateTime(receipt.createdAt)} />
 
+        {receipt.emailSent ? (
+          <View style={styles.emailNotice}>
+            <Ionicons name="mail-outline" size={18} color={colors.success} />
+            <Text style={styles.emailNoticeText}>
+              Enviamos una copia de este ticket a tu correo electrónico registrado.
+            </Text>
+          </View>
+        ) : null}
+
+        {receipt.productLegend ? (
+          <View style={styles.legendBox}>
+            <Text style={styles.legendTitle}>Leyenda del producto / proveedor</Text>
+            <Text style={styles.legendText}>{receipt.productLegend}</Text>
+          </View>
+        ) : null}
+
+        <View style={styles.claimsBox}>
+          <Text style={styles.claimsTitle}>¿Dónde puedo reclamar o solicitar una aclaración?</Text>
+          <Text style={styles.claimsText}>
+            {receipt.claimsInfo ??
+              'Comunícate a la Unidad Especializada de Atención a Usuarios (UNE) de Banco Digital al 800-000-2262 o a aclaraciones@bancodigital.com presentando tu folio UPC y número de autorización. También puedes acudir a CONDUSEF (55 5340 0999 · www.condusef.gob.mx).'}
+          </Text>
+        </View>
+
         {refreshError ? (
           <Text accessibilityRole="alert" style={styles.error}>
             {refreshError}
@@ -248,5 +272,34 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     textAlign: 'right',
   },
+  emailNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.successBg,
+    borderRadius: radii.md,
+    padding: spacing.md,
+  },
+  emailNoticeText: { ...typography.caption, color: colors.success, fontWeight: '600', flex: 1 },
+  legendBox: {
+    backgroundColor: colors.surfaceMuted,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+    borderRadius: radii.sm,
+    padding: spacing.md,
+    gap: 4,
+  },
+  legendTitle: { ...typography.caption, color: colors.text, fontWeight: '700' },
+  legendText: { ...typography.caption, color: colors.textMuted, lineHeight: 18 },
+  claimsBox: {
+    backgroundColor: colors.warningBg,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.warning,
+    borderRadius: radii.sm,
+    padding: spacing.md,
+    gap: 4,
+  },
+  claimsTitle: { ...typography.caption, color: colors.warning, fontWeight: '700' },
+  claimsText: { ...typography.caption, color: colors.text, lineHeight: 18 },
   error: { ...typography.caption, color: colors.danger },
 });
